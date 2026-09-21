@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Actividad vial</title>
+  <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
@@ -76,6 +77,8 @@
   const userLat={{ lat }};
   const userLng={{ lng }};
   const radiusKm={{ radius_km }};
+  const tg=window.Telegram&&window.Telegram.WebApp?window.Telegram.WebApp:null;
+  const telegramInitData=tg&&tg.initData?tg.initData:"";
   const clientToken=localStorage.getItem("traffic_client_token")||"";
   const kindsMeta={
     accidente:["🚗","Accidente"],via_cerrada:["⛔","Vía cerrada"],inundacion:["🌊","Inundación"],
@@ -107,7 +110,10 @@
     return L.divIcon({className:"emoji-marker"+cls,html:meta[0],iconSize:[36,36],iconAnchor:[18,18]});
   }
   function headers(extra={}){
-    return Object.assign({},clientToken?{"X-Client-Token":clientToken}:{},extra);
+    const base={};
+    if(telegramInitData)base["X-Telegram-Init-Data"]=telegramInitData;
+    if(clientToken)base["X-Client-Token"]=clientToken;
+    return Object.assign(base,extra);
   }
 
   async function fetchIncidents(){
@@ -130,11 +136,12 @@
     return `<strong>${meta[0]} ${meta[1]}</strong><br>
       ${item.description||"Sin descripción"}<br>
       ${ageText(item.age_seconds)} · ${item.distance_km} km<br>
-      <b>${item.trust}</b><br>
-      ✅ ${item.confirmations} · 🟢 ${item.gone_votes} · ⚠️ ${item.incorrect_votes}<br><br>
+      <b>${item.trust}</b> · reputación ${item.owner_reputation}/100<br>
+      ✅ ${item.confirmations} · peso ${item.weighted_confirmations} · 🟢 ${item.gone_votes} · ⚠️ ${item.incorrect_votes}<br><br>
       <button onclick="voteIncident(${item.id},'confirm')">✅ Confirmar${item.my_vote==='confirm'?' ✓':''}</button>
       <button onclick="voteIncident(${item.id},'gone')">🟢 Ya no está${item.my_vote==='gone'?' ✓':''}</button>
       <button onclick="voteIncident(${item.id},'incorrect')">⚠️ Incorrecto${item.my_vote==='incorrect'?' ✓':''}</button>
+      <button onclick="shareIncident(${item.id})">🔗 Compartir</button>
       ${own}`;
   }
 
@@ -151,14 +158,16 @@
       card.className="incident-card";
       card.innerHTML=`<h3>${meta[0]} ${meta[1]}</h3>
         <div>${item.description||"Sin descripción"}</div>
-        <div class="meta">${ageText(item.age_seconds)} · ${item.distance_km} km · ✅ ${item.confirmations}</div>
+        <div class="meta">${ageText(item.age_seconds)} · ${item.distance_km} km · ✅ ${item.confirmations} · reputación ${item.owner_reputation}/100</div>
         <span class="trust">${item.trust}</span>
         <div class="actions">
           <button data-action="confirm">✅ Confirmar</button>
           <button data-action="gone">🟢 Ya no está</button>
+          <button data-action="share">🔗 Compartir</button>
         </div>`;
       card.querySelector('[data-action="confirm"]').onclick=()=>voteIncident(item.id,"confirm");
       card.querySelector('[data-action="gone"]').onclick=()=>voteIncident(item.id,"gone");
+      card.querySelector('[data-action="share"]').onclick=()=>shareIncident(item.id);
       card.onclick=(e)=>{if(e.target.tagName!=="BUTTON"){map.setView([item.lat,item.lng],17);m.openPopup();}};
       panel.appendChild(card);
     });
@@ -167,8 +176,17 @@
       : `Mostrando ${incidents.length} reportes en esta zona.`;
   }
 
+  window.shareIncident=async(id)=>{
+    const item=incidents.find(x=>x.id===id);
+    const url=new URL(item&&item.share_url?item.share_url:`/incident/${id}`,location.origin).href;
+    try{
+      if(navigator.share)await navigator.share({title:"Tráfico Seguro",text:`Reporte vial #${id}`,url});
+      else{await navigator.clipboard.writeText(url);alert("Enlace copiado.");}
+    }catch(e){if(e.name!=="AbortError")alert("No se pudo compartir.");}
+  };
+
   window.voteIncident=async(id,action)=>{
-    if(!clientToken){alert("Abre el mapa desde la Mini App para participar.");return;}
+    if(!telegramInitData){alert("Abre el mapa desde la Mini App para participar.");return;}
     const r=await fetch(`/api/incidents/${id}/vote`,{method:"POST",headers:headers({"Content-Type":"application/json"}),body:JSON.stringify({action})});
     const data=await r.json();
     if(!r.ok){alert(data.detail||"No se pudo registrar el voto");return;}
