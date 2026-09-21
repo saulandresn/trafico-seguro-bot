@@ -42,7 +42,7 @@
 <body>
 <main>
   <h1>🚦 Tráfico Seguro</h1>
-  <p class="muted">Consulta y reporta incidentes viales. Tu ubicación actual se usa para funciones cercanas y no se guarda como historial personal.</p>
+  <p class="muted">Consulta y reporta incidentes viales dentro de la provincia de Loja. Tu ubicación actual se usa para verificar cobertura y funciones cercanas; no se guarda como historial personal.</p>
 
   <section class="card" id="locationCard">
     <div id="locationStatus" class="status">Comprobando ubicación…</div>
@@ -51,9 +51,23 @@
     <button id="openSettings" class="secondary hidden">Abrir ajustes</button>
   </section>
 
+  <section class="card hidden" id="termsCard">
+    <div class="status">Términos de uso</div>
+    <p class="muted">Antes de participar debes aceptar las reglas de uso. Los reportes son comunitarios, pueden contener errores y no sustituyen servicios de emergencia ni fuentes oficiales.</p>
+    <p class="muted">Los reportes solo se permiten cuando tu ubicación actual y el incidente están dentro de la provincia de Loja.</p>
+    <label class="switch-row" style="justify-content:flex-start;margin-top:10px">
+      <input type="checkbox" id="termsCheckbox" />
+      <span>He leído y acepto los Términos de uso y aviso de responsabilidad.</span>
+    </label>
+    <button id="acceptTerms">Aceptar y continuar</button>
+    <button id="viewTerms" class="secondary">Leer términos completos</button>
+    <div id="termsResult" class="muted"></div>
+  </section>
+
   <section class="card hidden" id="homeCard">
     <div class="status ok">✅ Ubicación disponible</div>
     <div id="coords" class="muted"></div>
+    <div id="coverageNotice" class="muted" style="margin-top:6px"></div>
     <div id="reputation" class="rep hidden"></div>
     <div class="grid" style="margin-top:12px">
       <button id="showMap">🗺 Ver mapa</button>
@@ -132,6 +146,8 @@
   }
 
   let currentLocation=null;
+  let insideLoja=false;
+  let termsAccepted=false;
   let reportLocation=null;
   let pickMap=null;
   let pickMarker=null;
@@ -140,15 +156,19 @@
   let seenIncidentIds=new Set(JSON.parse(localStorage.getItem("traffic_seen_incidents")||"[]"));
 
   const $=id=>document.getElementById(id);
-  const authHeaders=extra=>Object.assign(
-    {
+  const authHeaders=extra=>{
+    const base={
       "X-Telegram-Init-Data":telegramInitData,
       "X-Client-Token":clientToken
-    },
-    extra||{}
-  );
+    };
+    if(currentLocation){
+      base["X-Reporter-Lat"]=String(currentLocation.latitude);
+      base["X-Reporter-Lng"]=String(currentLocation.longitude);
+    }
+    return Object.assign(base,extra||{});
+  };
   const statusEl=$("locationStatus"), detailEl=$("locationDetail");
-  const reportCard=$("reportCard"), mineCard=$("mineCard"), homeCard=$("homeCard");
+  const reportCard=$("reportCard"), mineCard=$("mineCard"), homeCard=$("homeCard"), termsCard=$("termsCard");
   const pickMapWrap=$("pickMapWrap"), resultEl=$("reportResult");
 
   const quickByKind={
@@ -191,6 +211,42 @@
     $("reputation").textContent=`Reputación: ${rep.score}/100 · peso ${rep.weight}×`;
     $("reputation").classList.remove("hidden");
   }
+  async function refreshAccess(){
+    if(!currentLocation)return;
+
+    const regionR=await fetch(`/api/region/check?lat=${currentLocation.latitude}&lng=${currentLocation.longitude}`);
+    const region=await regionR.json();
+    insideLoja=!!region.inside;
+
+    const termsR=await fetch("/api/terms/status",{headers:authHeaders()});
+    if(termsR.ok){
+      const terms=await termsR.json();
+      termsAccepted=!!terms.accepted;
+    }else{
+      termsAccepted=false;
+    }
+
+    $("coverageNotice").textContent=insideLoja
+      ? "Cobertura verificada: provincia de Loja."
+      : "Fuera de cobertura: puedes consultar el mapa, pero no crear ni editar reportes.";
+
+    const reportAllowed=insideLoja&&termsAccepted;
+    $("showReport").disabled=!reportAllowed;
+    $("navReport").disabled=!reportAllowed;
+
+    if(!termsAccepted){
+      termsCard.classList.remove("hidden");
+    }else{
+      termsCard.classList.add("hidden");
+    }
+
+    if(insideLoja){
+      setStatus("✅ Ubicación disponible",reportAllowed?"Puedes consultar y reportar dentro de Loja.":"Puedes consultar el mapa. Acepta los términos para participar.","ok");
+    }else{
+      setStatus("Ubicación fuera de cobertura","Los reportes están limitados a la provincia de Loja. El mapa sigue disponible.","warn");
+    }
+  }
+
   function enableApp(location){
     currentLocation=location;
     reportLocation={latitude:location.latitude,longitude:location.longitude};
@@ -198,8 +254,7 @@
     $("coords").textContent=`Ubicación verificada${accuracy}`;
     homeCard.classList.remove("hidden");
     $("retryLocation").classList.add("hidden"); $("openSettings").classList.add("hidden");
-    setStatus("✅ Ubicación disponible","Mapa, reportes y alertas ya están habilitados.","ok");
-    loadStats(); loadReputation(); startAlertsIfEnabled(); handleHash();
+    refreshAccess().then(()=>{loadStats();loadReputation();startAlertsIfEnabled();handleHash();});
   }
   function locationFailed(message,allowSettings=true){
     currentLocation=null; reportLocation=null; homeCard.classList.add("hidden");
@@ -338,6 +393,28 @@
     if($("alertsToggle").checked){checkAlerts();alertTimer=setInterval(checkAlerts,60000);}
   }
 
+  $("acceptTerms").onclick=async()=>{
+    if(!$("termsCheckbox").checked){
+      $("termsResult").textContent="Debes marcar la casilla de aceptación.";
+      return;
+    }
+    $("termsResult").textContent="Guardando aceptación…";
+    const r=await fetch("/api/terms/accept",{
+      method:"POST",
+      headers:authHeaders({"Content-Type":"application/json"}),
+      body:JSON.stringify({accepted:true})
+    });
+    const data=await r.json();
+    if(!r.ok){
+      $("termsResult").textContent=data.detail||"No se pudo guardar la aceptación.";
+      return;
+    }
+    termsAccepted=true;
+    $("termsResult").textContent="Aceptado.";
+    await refreshAccess();
+  };
+  $("viewTerms").onclick=()=>{window.open("/terms","_blank");};
+
   $("retryLocation").onclick=requestLocation;
   $("openSettings").onclick=()=>{if(tg&&tg.LocationManager&&tg.LocationManager.openSettings)tg.LocationManager.openSettings();};
   $("kind").onchange=renderQuick;
@@ -345,7 +422,18 @@
     if(!currentLocation)return;
     location.href=`/map?lat=${currentLocation.latitude}&lng=${currentLocation.longitude}&radius_km=${radiusKm}`;
   };
-  $("showReport").onclick=$("navReport").onclick=()=>{resetReport();showOnly(reportCard);};
+  $("showReport").onclick=$("navReport").onclick=()=>{
+    if(!insideLoja){
+      alert("Solo puedes crear reportes cuando tu ubicación actual está dentro de la provincia de Loja.");
+      return;
+    }
+    if(!termsAccepted){
+      termsCard.classList.remove("hidden");
+      termsCard.scrollIntoView({behavior:"smooth"});
+      return;
+    }
+    resetReport();showOnly(reportCard);
+  };
   $("navHome").onclick=()=>{resetReport();showOnly(null);};
   $("navMine").onclick=()=>{showOnly(mineCard);loadMine();};
   $("useCurrentLocation").onclick=()=>{pickMapWrap.classList.add("hidden");setReportLocation(currentLocation.latitude,currentLocation.longitude,"Usando tu ubicación actual.");};
@@ -360,6 +448,8 @@
 
   $("submitReport").onclick=async()=>{
     const kind=$("kind").value, description=$("description").value.trim();
+    if(!insideLoja){resultEl.textContent="Los reportes solo están disponibles dentro de la provincia de Loja.";return;}
+    if(!termsAccepted){resultEl.textContent="Debes aceptar los Términos de uso.";return;}
     if(!kind){resultEl.textContent="Selecciona un tipo.";return;}
     if(!reportLocation){resultEl.textContent="Selecciona la ubicación.";return;}
     const d=currentLocation?haversine(currentLocation.latitude,currentLocation.longitude,reportLocation.latitude,reportLocation.longitude):0;
