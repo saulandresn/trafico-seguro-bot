@@ -39,3 +39,14 @@ class IncidentVote(Base):
     voter_token: Mapped[str] = mapped_column(String(80), index=True)
     action: Mapped[str] = mapped_column(String(20), index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class TermsAcceptance(Base):
+    __tablename__ = "terms_acceptances"
+
+    actor_token: Mapped[str] = mapped_column(String(80), primary_key=True)
+    terms_version: Mapped[str] = mapped_column(String(20), index=True)
+    accepted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
