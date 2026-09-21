@@ -43,11 +43,21 @@ def make_init_data(user_id: int, auth_date: int | None = None) -> str:
     return urlencode(payload)
 
 
-def auth_headers(user_id: int) -> dict:
+def auth_headers(user_id: int, lat: float = -4.05, lng: float = -79.20) -> dict:
     return {
         "X-Telegram-Init-Data": make_init_data(user_id),
         "X-Client-Token": f"legacy-{user_id}",
+        "X-Reporter-Lat": str(lat),
+        "X-Reporter-Lng": str(lng),
     }
+
+
+def accept_terms(user_id: int):
+    return client.post(
+        "/api/terms/accept",
+        json={"accepted": True},
+        headers=auth_headers(user_id),
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -59,10 +69,11 @@ def clean_database():
 
 
 def create_report(user_id: int = 1, **overrides):
+    accept_terms(user_id)
     payload = {
         "kind": "accidente",
-        "latitude": -2.17,
-        "longitude": -79.9,
+        "latitude": -4.05,
+        "longitude": -79.20,
         "description": "Carril bloqueado",
     }
     payload.update(overrides)
@@ -74,8 +85,8 @@ def test_invalid_telegram_init_data_is_rejected():
         "/api/incidents",
         json={
             "kind": "accidente",
-            "latitude": -2.17,
-            "longitude": -79.9,
+            "latitude": -4.05,
+            "longitude": -79.20,
             "description": "Prueba",
         },
         headers={"X-Telegram-Init-Data": "auth_date=1&hash=bad"},
@@ -93,8 +104,8 @@ def test_create_edit_share_and_delete_own_report():
         headers=auth_headers(1),
         json={
             "kind": "alarma",
-            "latitude": -2.171,
-            "longitude": -79.901,
+            "latitude": -4.051,
+            "longitude": -79.201,
             "description": "Obstáculo en la vía",
         },
     )
@@ -105,13 +116,14 @@ def test_create_edit_share_and_delete_own_report():
     assert detail.status_code == 200
     assert "Compartir" in detail.text
 
+    accept_terms(2)
     other_user_edit = client.put(
         f"/api/incidents/{incident_id}",
         headers=auth_headers(2),
         json={
             "kind": "alarma",
-            "latitude": -2.171,
-            "longitude": -79.901,
+            "latitude": -4.051,
+            "longitude": -79.201,
             "description": "Cambio ajeno",
         },
     )
@@ -132,6 +144,7 @@ def test_votes_affect_reputation_and_gone_hides_report():
     assert created.status_code == 200
     incident_id = created.json()["id"]
 
+    accept_terms(20)
     confirmed = client.post(
         f"/api/incidents/{incident_id}/vote",
         headers={**auth_headers(20), "Content-Type": "application/json"},
@@ -153,7 +166,7 @@ def test_votes_affect_reputation_and_gone_hides_report():
     assert gone.json()["active"] is False
 
     nearby = client.get(
-        "/api/incidents/nearby?lat=-2.17&lng=-79.9&radius_km=3",
+        "/api/incidents/nearby?lat=-4.05&lng=-79.20&radius_km=3",
         headers=auth_headers(10),
     )
     assert nearby.status_code == 200
@@ -181,7 +194,69 @@ def test_navigation_and_edit_form_are_present():
     assert "editIncidentId" in mini.text
     assert "X-Telegram-Init-Data" in mini.text
 
-    map_page = client.get("/map?lat=-2.17&lng=-79.9&radius_km=3")
+    map_page = client.get("/map?lat=-4.05&lng=-79.20&radius_km=3")
     assert map_page.status_code == 200
     assert "shareIncident" in map_page.text
     assert "X-Telegram-Init-Data" in map_page.text
+
+
+
+def test_terms_are_required_before_creating_report():
+    payload = {
+        "kind": "accidente",
+        "latitude": -4.05,
+        "longitude": -79.20,
+        "description": "Prueba",
+    }
+    response = client.post(
+        "/api/incidents",
+        json=payload,
+        headers=auth_headers(99),
+    )
+    assert response.status_code == 403
+    assert "Términos" in response.json()["detail"]
+
+
+def test_reporter_outside_loja_is_rejected():
+    accept_terms(30)
+    response = client.post(
+        "/api/incidents",
+        json={
+            "kind": "accidente",
+            "latitude": -4.05,
+            "longitude": -79.20,
+            "description": "Prueba",
+        },
+        headers=auth_headers(30, lat=-2.17, lng=-79.90),
+    )
+    assert response.status_code == 403
+    assert "provincia de Loja" in response.json()["detail"]
+
+
+def test_incident_point_outside_loja_is_rejected():
+    accept_terms(31)
+    response = client.post(
+        "/api/incidents",
+        json={
+            "kind": "accidente",
+            "latitude": -2.17,
+            "longitude": -79.90,
+            "description": "Prueba",
+        },
+        headers=auth_headers(31),
+    )
+    assert response.status_code == 400
+    assert "provincia de Loja" in response.json()["detail"]
+
+
+def test_terms_and_region_ui_are_present():
+    mini = client.get("/mini-app")
+    assert mini.status_code == 200
+    assert 'id="termsCard"' in mini.text
+    assert "/api/terms/accept" in mini.text
+    assert "/api/region/check" in mini.text
+
+    terms = client.get("/terms")
+    assert terms.status_code == 200
+    assert "No es un servicio de emergencia" in terms.text
+    assert "provincia de Loja" in terms.text
