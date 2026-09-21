@@ -3,58 +3,69 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#2481cc" />
+  <link rel="manifest" href="/manifest.webmanifest" />
   <title>Tráfico Seguro</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <style>
-    :root { color-scheme: light dark; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-    body { margin: 0; background: var(--tg-theme-bg-color, #f6f7f9); color: var(--tg-theme-text-color, #111827); }
-    main { max-width: 620px; margin: 0 auto; padding: 18px 16px 32px; }
-    h1 { margin: 0 0 8px; font-size: 24px; }
-    p { line-height: 1.45; }
-    .card { background: var(--tg-theme-secondary-bg-color, #ffffff); border-radius: 16px; padding: 16px; margin-top: 14px; }
-    .status { font-weight: 700; margin-bottom: 6px; }
-    .muted { opacity: .72; font-size: 14px; }
-    button, select, textarea { box-sizing: border-box; width: 100%; border: 0; border-radius: 12px; padding: 13px 14px; font: inherit; margin-top: 10px; }
-    button { background: var(--tg-theme-button-color, #2481cc); color: var(--tg-theme-button-text-color, white); font-weight: 700; cursor: pointer; }
-    button.secondary { background: var(--tg-theme-secondary-bg-color, #e5e7eb); color: var(--tg-theme-text-color, #111827); outline: 1px solid rgba(127,127,127,.25); }
-    select, textarea { background: var(--tg-theme-bg-color, #f8fafc); color: var(--tg-theme-text-color, #111827); outline: 1px solid rgba(127,127,127,.25); }
-    textarea { resize: vertical; min-height: 74px; }
-    .hidden { display: none; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .grid button { margin-top: 0; }
-    .ok { color: #15803d; }
-    .warn { color: #b45309; }
-    #pickMap { height: 300px; border-radius: 12px; margin-top: 10px; overflow: hidden; }
+    :root { color-scheme:light dark; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    body { margin:0; background:var(--tg-theme-bg-color,#f6f7f9); color:var(--tg-theme-text-color,#111827); }
+    main { max-width:680px; margin:0 auto; padding:18px 16px 92px; }
+    h1 { margin:0 0 8px; font-size:24px; }
+    .card { background:var(--tg-theme-secondary-bg-color,#fff); border-radius:16px; padding:16px; margin-top:14px; }
+    .status { font-weight:700; margin-bottom:6px; }
+    .muted { opacity:.72; font-size:14px; line-height:1.4; }
+    button,select,textarea { box-sizing:border-box; width:100%; border:0; border-radius:12px; padding:13px 14px; font:inherit; margin-top:10px; }
+    button { background:var(--tg-theme-button-color,#2481cc); color:var(--tg-theme-button-text-color,#fff); font-weight:700; cursor:pointer; }
+    button.secondary { background:var(--tg-theme-secondary-bg-color,#e5e7eb); color:var(--tg-theme-text-color,#111827); outline:1px solid rgba(127,127,127,.25); }
+    select,textarea { background:var(--tg-theme-bg-color,#f8fafc); color:var(--tg-theme-text-color,#111827); outline:1px solid rgba(127,127,127,.25); }
+    textarea { resize:vertical; min-height:76px; }
+    .hidden { display:none; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .grid button { margin-top:0; }
+    .ok { color:#15803d; } .warn { color:#b45309; }
+    #pickMap { height:300px; border-radius:12px; margin-top:10px; overflow:hidden; }
+    .quick { display:flex; gap:6px; overflow-x:auto; padding-top:8px; }
+    .quick button { width:auto; margin:0; padding:8px 10px; white-space:nowrap; font-size:13px; }
+    .mine-item { border-top:1px solid rgba(127,127,127,.22); padding:10px 0; }
+    .mine-item:first-child { border-top:0; }
+    .bottom-nav { position:fixed; left:0; right:0; bottom:0; display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:#d1d5db; z-index:1000; }
+    .bottom-nav button { border-radius:0; margin:0; padding:11px 3px; background:var(--tg-theme-secondary-bg-color,#fff); color:var(--tg-theme-text-color,#111827); font-size:12px; }
+    .switch-row { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .switch-row input { width:20px; height:20px; }
   </style>
 </head>
 <body>
 <main>
-  <div class="grid" id="topNav">
-    <button id="navHome" class="secondary">🏠 Inicio</button>
-    <button id="navMap" class="secondary">🗺 Mapa</button>
-  </div>
   <h1>🚦 Tráfico Seguro</h1>
-  <p class="muted">La ubicación se usa para habilitar funciones cercanas. No se guarda como historial personal.</p>
+  <p class="muted">Consulta y reporta incidentes viales. Tu ubicación actual se usa para funciones cercanas y no se guarda como historial personal.</p>
 
   <section class="card" id="locationCard">
     <div id="locationStatus" class="status">Comprobando ubicación…</div>
     <div id="locationDetail" class="muted">Espera un momento.</div>
     <button id="retryLocation" class="hidden">Comprobar ubicación</button>
-    <button id="openSettings" class="secondary hidden">Abrir ajustes de ubicación</button>
+    <button id="openSettings" class="secondary hidden">Abrir ajustes</button>
   </section>
 
-  <section class="card hidden" id="menuCard">
+  <section class="card hidden" id="homeCard">
     <div class="status ok">✅ Ubicación disponible</div>
     <div id="coords" class="muted"></div>
-    <div class="grid" style="margin-top:12px;">
+    <div class="grid" style="margin-top:12px">
       <button id="showMap">🗺 Ver mapa</button>
-      <button id="showReport">🚨 Reportar incidente</button>
+      <button id="showReport">➕ Reportar</button>
+    </div>
+    <div class="switch-row" style="margin-top:14px">
+      <div>
+        <b>🔔 Alertas cercanas</b>
+        <div class="muted">Avisa de nuevos reportes mientras esta Mini App esté abierta.</div>
+      </div>
+      <input type="checkbox" id="alertsToggle" />
     </div>
   </section>
 
   <section class="card hidden" id="reportCard">
-    <div class="status">🚨 Reportar incidente</div>
+    <div class="status">➕ Reportar incidente</div>
     <select id="kind">
       <option value="">Selecciona el tipo</option>
       <option value="accidente">🚗 Accidente</option>
@@ -65,249 +76,255 @@
       <option value="congestion">🐢 Congestión</option>
       <option value="alarma">🚨</option>
     </select>
+    <div class="quick" id="quickDescriptions"></div>
     <textarea id="description" maxlength="240" placeholder="Descripción opcional"></textarea>
 
-    <div class="status" style="margin-top:14px;">Ubicación del incidente</div>
+    <div class="status" style="margin-top:14px">Ubicación del incidente</div>
     <div class="grid">
-      <button id="useCurrentLocation">📍 Usar ubicación actual</button>
+      <button id="useCurrentLocation">📍 Actual</button>
       <button id="chooseOnMap" class="secondary">🗺 Elegir en mapa</button>
     </div>
-    <div id="selectedLocationText" class="muted" style="margin-top:8px;">Usando tu ubicación actual.</div>
+    <div id="selectedLocationText" class="muted" style="margin-top:8px">Usando tu ubicación actual.</div>
+    <div id="distanceWarning" class="muted warn hidden"></div>
     <div id="pickMapWrap" class="hidden">
       <div id="pickMap"></div>
-      <div class="muted" style="margin-top:8px;">Toca el mapa en el punto exacto donde ocurrió el incidente. Puedes mover el mapa y volver a tocar para corregirlo.</div>
+      <div class="muted" style="margin-top:8px">Toca el punto exacto. Puedes volver a tocar para corregirlo.</div>
     </div>
 
     <button id="submitReport">Registrar incidente</button>
     <button id="cancelReport" class="secondary">Cancelar</button>
     <div id="reportResult" class="muted"></div>
   </section>
+
+  <section class="card hidden" id="mineCard">
+    <div class="status">📋 Mis reportes</div>
+    <div id="mineList" class="muted">Cargando…</div>
+  </section>
+
+  <section class="card" id="statsCard">
+    <div class="status">📊 Actividad</div>
+    <div id="statsText" class="muted">Cargando estadísticas…</div>
+  </section>
 </main>
+
+<nav class="bottom-nav">
+  <button id="navHome">🏠<br>Inicio</button>
+  <button id="navMap">🗺<br>Mapa</button>
+  <button id="navReport">➕<br>Reportar</button>
+  <button id="navMine">📋<br>Mis reportes</button>
+</nav>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script>
 (() => {
-  const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
-  const radiusKm = {{ radius_km }};
-  let clientToken = localStorage.getItem("traffic_client_token");
-  if (!clientToken) {
-    clientToken = (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
-    localStorage.setItem("traffic_client_token", clientToken);
-  }
-  let currentLocation = null;
-  let reportLocation = null;
-  let pickMap = null;
-  let pickMarker = null;
-
-  const statusEl = document.getElementById("locationStatus");
-  const detailEl = document.getElementById("locationDetail");
-  const retryBtn = document.getElementById("retryLocation");
-  const settingsBtn = document.getElementById("openSettings");
-  const menuCard = document.getElementById("menuCard");
-  const reportCard = document.getElementById("reportCard");
-  const coordsEl = document.getElementById("coords");
-  const resultEl = document.getElementById("reportResult");
-  const selectedLocationText = document.getElementById("selectedLocationText");
-  const pickMapWrap = document.getElementById("pickMapWrap");
-
-  function setStatus(title, detail, kind = "") {
-    statusEl.textContent = title;
-    statusEl.className = "status " + kind;
-    detailEl.textContent = detail || "";
+  const tg=window.Telegram&&window.Telegram.WebApp?window.Telegram.WebApp:null;
+  const radiusKm={{ radius_km }};
+  let clientToken=localStorage.getItem("traffic_client_token");
+  if(!clientToken){
+    clientToken=(crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2));
+    localStorage.setItem("traffic_client_token",clientToken);
   }
 
-  function enableApp(location) {
-    currentLocation = location;
-    reportLocation = { latitude: location.latitude, longitude: location.longitude };
-    const accuracy = location.horizontal_accuracy != null ? ` · precisión aprox. ${Math.round(location.horizontal_accuracy)} m` : "";
-    coordsEl.textContent = `Ubicación verificada${accuracy}`;
-    menuCard.classList.remove("hidden");
-    retryBtn.classList.add("hidden");
-    settingsBtn.classList.add("hidden");
-    setStatus("✅ Ubicación disponible", "Las funciones de mapa y reportes están habilitadas.", "ok");
+  let currentLocation=null;
+  let reportLocation=null;
+  let pickMap=null;
+  let pickMarker=null;
+  let alertTimer=null;
+  let seenIncidentIds=new Set(JSON.parse(localStorage.getItem("traffic_seen_incidents")||"[]"));
+
+  const $=id=>document.getElementById(id);
+  const headers=extra=>Object.assign({"X-Client-Token":clientToken},extra||{});
+  const statusEl=$("locationStatus"), detailEl=$("locationDetail");
+  const reportCard=$("reportCard"), mineCard=$("mineCard"), homeCard=$("homeCard");
+  const pickMapWrap=$("pickMapWrap"), resultEl=$("reportResult");
+
+  const quickByKind={
+    accidente:["Carril bloqueado","Vehículos detenidos","Tránsito lento"],
+    via_cerrada:["Cierre total","Cierre parcial","Desvío activo"],
+    inundacion:["Agua alta","Paso complicado","Vía anegada"],
+    semaforo:["Apagado","Intermitente","No funciona"],
+    obras:["Maquinaria en vía","Carril reducido","Desvío"],
+    congestion:["Tráfico pesado","Fila larga","Avance lento"],
+    alarma:["Precaución","Obstáculo","Situación vial"]
+  };
+
+  function setStatus(title,detail,kind=""){
+    statusEl.textContent=title; statusEl.className="status "+kind; detailEl.textContent=detail||"";
   }
-
-  function locationFailed(message, allowSettings = true) {
-    currentLocation = null;
-    reportLocation = null;
-    menuCard.classList.add("hidden");
-    reportCard.classList.add("hidden");
-    retryBtn.classList.remove("hidden");
-    if (allowSettings) settingsBtn.classList.remove("hidden");
-    setStatus("Ubicación no disponible", message, "warn");
+  function showOnly(section){
+    [reportCard,mineCard].forEach(x=>x.classList.add("hidden"));
+    if(section)section.classList.remove("hidden");
+    window.scrollTo({top:0,behavior:"smooth"});
   }
-
-  function requestLocation() {
-    if (!tg || !tg.LocationManager) {
-      locationFailed("Esta versión de Telegram no ofrece acceso de ubicación para Mini Apps. Actualiza Telegram e inténtalo nuevamente.", false);
-      return;
-    }
-
-    const lm = tg.LocationManager;
-    const ask = () => {
-      if (!lm.isLocationAvailable) {
-        locationFailed("Los servicios de ubicación no están disponibles en este dispositivo. Activa la ubicación del sistema e inténtalo nuevamente.");
-        return;
-      }
-      setStatus("Solicitando ubicación…", "Telegram puede pedirte permiso la primera vez.");
-      lm.getLocation((locationData) => {
-        if (!locationData) {
-          locationFailed("Telegram no pudo obtener tu ubicación. Revisa el permiso de ubicación e inténtalo nuevamente.");
-          return;
-        }
-        enableApp(locationData);
-      });
+  function haversine(a,b,c,d){
+    const r=6371, toRad=x=>x*Math.PI/180;
+    const dp=toRad(c-a), dl=toRad(d-b);
+    const q=Math.sin(dp/2)**2+Math.cos(toRad(a))*Math.cos(toRad(c))*Math.sin(dl/2)**2;
+    return 2*r*Math.asin(Math.sqrt(q));
+  }
+  function updateDistanceWarning(){
+    if(!currentLocation||!reportLocation)return;
+    const d=haversine(currentLocation.latitude,currentLocation.longitude,reportLocation.latitude,reportLocation.longitude);
+    if(d>5){
+      $("distanceWarning").textContent=`⚠️ El punto elegido está a ${d.toFixed(1)} km de tu ubicación actual.`;
+      $("distanceWarning").classList.remove("hidden");
+    }else $("distanceWarning").classList.add("hidden");
+  }
+  function enableApp(location){
+    currentLocation=location;
+    reportLocation={latitude:location.latitude,longitude:location.longitude};
+    const accuracy=location.horizontal_accuracy!=null?` · precisión aprox. ${Math.round(location.horizontal_accuracy)} m`:"";
+    $("coords").textContent=`Ubicación verificada${accuracy}`;
+    homeCard.classList.remove("hidden");
+    $("retryLocation").classList.add("hidden"); $("openSettings").classList.add("hidden");
+    setStatus("✅ Ubicación disponible","Mapa, reportes y alertas ya están habilitados.","ok");
+    loadStats(); startAlertsIfEnabled(); handleHash();
+  }
+  function locationFailed(message,allowSettings=true){
+    currentLocation=null; reportLocation=null; homeCard.classList.add("hidden");
+    $("retryLocation").classList.remove("hidden");
+    if(allowSettings)$("openSettings").classList.remove("hidden");
+    setStatus("Ubicación no disponible",message,"warn");
+  }
+  function requestLocation(){
+    if(!tg||!tg.LocationManager){locationFailed("Esta versión de Telegram no ofrece ubicación para Mini Apps.",false);return;}
+    const lm=tg.LocationManager;
+    const ask=()=>{
+      if(!lm.isLocationAvailable){locationFailed("Activa los servicios de ubicación del dispositivo.");return;}
+      setStatus("Solicitando ubicación…","Telegram puede pedir permiso.");
+      lm.getLocation(data=>data?enableApp(data):locationFailed("No se pudo obtener la ubicación. Revisa el permiso."));
     };
-
-    if (lm.isInited) ask();
-    else lm.init(ask);
+    lm.isInited?ask():lm.init(ask);
   }
 
-  function setReportLocation(lat, lng, sourceText) {
-    reportLocation = { latitude: lat, longitude: lng };
-    selectedLocationText.textContent = sourceText;
-    if (pickMap) {
-      if (!pickMarker) pickMarker = L.marker([lat, lng]).addTo(pickMap);
-      else pickMarker.setLatLng([lat, lng]);
+  function setReportLocation(lat,lng,text){
+    reportLocation={latitude:lat,longitude:lng}; $("selectedLocationText").textContent=text; updateDistanceWarning();
+    if(pickMap){
+      if(!pickMarker)pickMarker=L.marker([lat,lng]).addTo(pickMap);
+      else pickMarker.setLatLng([lat,lng]);
     }
   }
-
-  function initPickMap() {
-    if (pickMap) {
-      setTimeout(() => pickMap.invalidateSize(), 50);
-      return;
-    }
-    pickMap = L.map("pickMap").setView([currentLocation.latitude, currentLocation.longitude], 16);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-      attribution: "&copy; OpenStreetMap contributors"
-    }).addTo(pickMap);
-
-    pickMap.on("click", (event) => {
-      setReportLocation(
-        event.latlng.lat,
-        event.latlng.lng,
-        `Punto elegido manualmente: ${event.latlng.lat.toFixed(6)}, ${event.latlng.lng.toFixed(6)}`
-      );
+  function initPickMap(){
+    if(pickMap){setTimeout(()=>pickMap.invalidateSize(),50);return;}
+    pickMap=L.map("pickMap").setView([currentLocation.latitude,currentLocation.longitude],16);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"&copy; OpenStreetMap contributors"}).addTo(pickMap);
+    pickMap.on("click",e=>setReportLocation(e.latlng.lat,e.latlng.lng,`Punto elegido: ${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}`));
+  }
+  function renderQuick(){
+    const box=$("quickDescriptions"); box.innerHTML="";
+    (quickByKind[$("kind").value]||[]).forEach(text=>{
+      const b=document.createElement("button"); b.type="button"; b.className="secondary"; b.textContent=text;
+      b.onclick=()=>{$("description").value=text;}; box.appendChild(b);
     });
   }
-
-  retryBtn.addEventListener("click", requestLocation);
-
-  settingsBtn.addEventListener("click", () => {
-    if (tg && tg.LocationManager && tg.LocationManager.openSettings) tg.LocationManager.openSettings();
-  });
-
-  function showHome() {
-    reportCard.classList.add("hidden");
+  function resetReport(){
+    $("kind").value=""; $("description").value=""; resultEl.textContent="";
+    $("quickDescriptions").innerHTML=""; $("distanceWarning").classList.add("hidden");
     pickMapWrap.classList.add("hidden");
-    window.scrollTo({top: 0, behavior: "smooth"});
+    if(pickMarker&&pickMap){pickMap.removeLayer(pickMarker);pickMarker=null;}
+    reportLocation=currentLocation?{latitude:currentLocation.latitude,longitude:currentLocation.longitude}:null;
+    $("selectedLocationText").textContent="Usando tu ubicación actual.";
   }
 
-  document.getElementById("navHome").addEventListener("click", showHome);
-  document.getElementById("navMap").addEventListener("click", () => {
-    document.getElementById("showMap").click();
-  });
-
-  document.getElementById("showMap").addEventListener("click", () => {
-    if (!currentLocation) return;
-    const params = new URLSearchParams({
-      lat: currentLocation.latitude,
-      lng: currentLocation.longitude,
-      radius_km: radiusKm
+  async function vote(id,action){
+    const r=await fetch(`/api/incidents/${id}/vote`,{method:"POST",headers:headers({"Content-Type":"application/json"}),body:JSON.stringify({action})});
+    const data=await r.json(); if(!r.ok)throw new Error(data.detail||"No se pudo votar"); return data;
+  }
+  async function loadMine(){
+    if(!currentLocation)return;
+    mineCard.classList.remove("hidden"); $("mineList").textContent="Cargando…";
+    const url=`/api/incidents/mine?lat=${currentLocation.latitude}&lng=${currentLocation.longitude}`;
+    const r=await fetch(url,{headers:headers()}); const data=await r.json();
+    if(!r.ok){$("mineList").textContent=data.detail||"No se pudo cargar";return;}
+    $("mineList").innerHTML="";
+    if(!data.incidents.length){$("mineList").textContent="Todavía no tienes reportes.";return;}
+    data.incidents.forEach(item=>{
+      const row=document.createElement("div"); row.className="mine-item";
+      row.innerHTML=`<b>#${item.id} · ${item.kind.replaceAll("_"," ")}</b><br>
+        <span class="muted">${item.active?"Activo":"Cerrado"} · ${item.trust} · ✅ ${item.confirmations}</span>
+        ${item.active?'<button class="secondary">🗑 Eliminar</button>':""}`;
+      const b=row.querySelector("button");
+      if(b)b.onclick=async()=>{if(!confirm("¿Eliminar este reporte?"))return;await fetch(`/api/incidents/${item.id}`,{method:"DELETE",headers:headers()});loadMine();};
+      $("mineList").appendChild(row);
     });
-    window.location.href = `/map?${params.toString()}`;
-  });
-
-  document.getElementById("showReport").addEventListener("click", () => {
-    reportCard.classList.remove("hidden");
-    resultEl.textContent = "";
-    setReportLocation(
-      currentLocation.latitude,
-      currentLocation.longitude,
-      "Usando tu ubicación actual."
-    );
-  });
-
-  document.getElementById("useCurrentLocation").addEventListener("click", () => {
-    pickMapWrap.classList.add("hidden");
-    setReportLocation(
-      currentLocation.latitude,
-      currentLocation.longitude,
-      "Usando tu ubicación actual."
-    );
-  });
-
-  document.getElementById("chooseOnMap").addEventListener("click", () => {
-    pickMapWrap.classList.remove("hidden");
-    initPickMap();
-    setTimeout(() => {
-      pickMap.invalidateSize();
-      pickMap.setView([reportLocation.latitude, reportLocation.longitude], 16);
-      if (!pickMarker) pickMarker = L.marker([reportLocation.latitude, reportLocation.longitude]).addTo(pickMap);
-    }, 50);
-    selectedLocationText.textContent = "Toca el mapa para elegir el punto exacto.";
-  });
-
-  document.getElementById("cancelReport").addEventListener("click", () => {
-    reportCard.classList.add("hidden");
-    pickMapWrap.classList.add("hidden");
-  });
-
-  document.getElementById("submitReport").addEventListener("click", async () => {
-    const kind = document.getElementById("kind").value;
-    const description = document.getElementById("description").value.trim();
-
-    if (!kind) {
-      resultEl.textContent = "Selecciona un tipo de incidente.";
-      return;
-    }
-    if (!reportLocation) {
-      resultEl.textContent = "Selecciona la ubicación del incidente.";
-      return;
-    }
-
-    resultEl.textContent = "Registrando…";
-
-    try {
-      const response = await fetch("/api/incidents", {
-        method: "POST",
-        headers: {"Content-Type": "application/json", "X-Client-Token": clientToken},
-        body: JSON.stringify({
-          kind,
-          latitude: reportLocation.latitude,
-          longitude: reportLocation.longitude,
-          description
-        })
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || "No se pudo registrar el incidente.");
-
-      resultEl.textContent = `✅ Incidente registrado con ID ${data.id}.`;
-      document.getElementById("kind").value = "";
-      document.getElementById("description").value = "";
-      reportLocation = currentLocation
-        ? { latitude: currentLocation.latitude, longitude: currentLocation.longitude }
-        : null;
-      if (pickMarker && pickMap) {
-        pickMap.removeLayer(pickMarker);
-        pickMarker = null;
-      }
-      pickMapWrap.classList.add("hidden");
-      setTimeout(() => {
-        reportCard.classList.add("hidden");
-        resultEl.textContent = "";
-        window.scrollTo({top: 0, behavior: "smooth"});
-      }, 700);
-    } catch (error) {
-      resultEl.textContent = "No se pudo registrar: " + error.message;
-    }
-  });
-
-  if (tg) {
-    tg.ready();
-    tg.expand();
   }
+  async function loadStats(){
+    const r=await fetch("/api/stats"); if(!r.ok)return;
+    const s=await r.json(); $("statsText").textContent=`${s.active} activos · ${s.resolved} cerrados · ${s.total} reportes totales`;
+  }
+
+  async function checkAlerts(){
+    if(!currentLocation||!$("alertsToggle").checked)return;
+    const url=`/api/incidents/nearby?lat=${currentLocation.latitude}&lng=${currentLocation.longitude}&radius_km=${radiusKm}`;
+    const r=await fetch(url,{headers:headers()}); if(!r.ok)return;
+    const data=await r.json();
+    const fresh=data.incidents.filter(x=>!seenIncidentIds.has(x.id));
+    data.incidents.forEach(x=>seenIncidentIds.add(x.id));
+    localStorage.setItem("traffic_seen_incidents",JSON.stringify([...seenIncidentIds].slice(-200)));
+    if(fresh.length){
+      const msg=`Hay ${fresh.length} reporte(s) vial(es) nuevo(s) cerca.`;
+      if(tg&&tg.showPopup)tg.showPopup({title:"Alerta cercana",message:msg,buttons:[{type:"ok"}]});
+      else alert(msg);
+    }
+  }
+  function startAlertsIfEnabled(){
+    if(alertTimer)clearInterval(alertTimer);
+    if($("alertsToggle").checked){checkAlerts();alertTimer=setInterval(checkAlerts,60000);}
+  }
+
+  $("retryLocation").onclick=requestLocation;
+  $("openSettings").onclick=()=>{if(tg&&tg.LocationManager&&tg.LocationManager.openSettings)tg.LocationManager.openSettings();};
+  $("kind").onchange=renderQuick;
+  $("showMap").onclick=$("navMap").onclick=()=>{
+    if(!currentLocation)return;
+    location.href=`/map?lat=${currentLocation.latitude}&lng=${currentLocation.longitude}&radius_km=${radiusKm}`;
+  };
+  $("showReport").onclick=$("navReport").onclick=()=>{showOnly(reportCard);resetReport();};
+  $("navHome").onclick=()=>showOnly(null);
+  $("navMine").onclick=()=>{showOnly(mineCard);loadMine();};
+  $("useCurrentLocation").onclick=()=>{pickMapWrap.classList.add("hidden");setReportLocation(currentLocation.latitude,currentLocation.longitude,"Usando tu ubicación actual.");};
+  $("chooseOnMap").onclick=()=>{
+    pickMapWrap.classList.remove("hidden"); initPickMap();
+    setTimeout(()=>{pickMap.invalidateSize();pickMap.setView([reportLocation.latitude,reportLocation.longitude],16);},50);
+    $("selectedLocationText").textContent="Toca el mapa para elegir el punto exacto.";
+  };
+  $("cancelReport").onclick=()=>{resetReport();showOnly(null);};
+  $("alertsToggle").checked=localStorage.getItem("traffic_alerts")==="1";
+  $("alertsToggle").onchange=()=>{localStorage.setItem("traffic_alerts",$("alertsToggle").checked?"1":"0");startAlertsIfEnabled();};
+
+  $("submitReport").onclick=async()=>{
+    const kind=$("kind").value, description=$("description").value.trim();
+    if(!kind){resultEl.textContent="Selecciona un tipo.";return;}
+    if(!reportLocation){resultEl.textContent="Selecciona la ubicación.";return;}
+    const d=currentLocation?haversine(currentLocation.latitude,currentLocation.longitude,reportLocation.latitude,reportLocation.longitude):0;
+    if(d>5&&!confirm(`El punto está a ${d.toFixed(1)} km de ti. ¿Registrar de todos modos?`))return;
+
+    resultEl.textContent="Registrando…";
+    const r=await fetch("/api/incidents",{method:"POST",headers:headers({"Content-Type":"application/json"}),body:JSON.stringify({kind,latitude:reportLocation.latitude,longitude:reportLocation.longitude,description})});
+    const data=await r.json();
+
+    if(r.status===409&&data.duplicate_id){
+      if(confirm("Ya existe un reporte similar muy cerca. ¿Quieres confirmarlo en lugar de crear otro?")){
+        try{await vote(data.duplicate_id,"confirm");resultEl.textContent="✅ Reporte existente confirmado.";setTimeout(()=>{resetReport();showOnly(null);},600);}
+        catch(e){resultEl.textContent=e.message;}
+      }else resultEl.textContent="No se creó un duplicado.";
+      return;
+    }
+    if(!r.ok){resultEl.textContent=data.detail||"No se pudo registrar.";return;}
+
+    resultEl.textContent=`✅ Reporte #${data.id} registrado.`;
+    seenIncidentIds.add(data.id);
+    setTimeout(()=>{resetReport();showOnly(null);loadStats();},600);
+  };
+
+  function handleHash(){
+    if(location.hash==="#report"){$("navReport").click();}
+    else if(location.hash==="#mine"){$("navMine").click();}
+  }
+  window.addEventListener("hashchange",handleHash);
+
+  if("serviceWorker" in navigator)navigator.serviceWorker.register("/service-worker.js").catch(()=>{});
+  if(tg){tg.ready();tg.expand();}
   requestLocation();
 })();
 </script>
