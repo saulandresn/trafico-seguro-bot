@@ -30,6 +30,10 @@
 </head>
 <body>
 <main>
+  <div class="grid" id="topNav">
+    <button id="navHome" class="secondary">🏠 Inicio</button>
+    <button id="navMap" class="secondary">🗺 Mapa</button>
+  </div>
   <h1>🚦 Tráfico Seguro</h1>
   <p class="muted">La ubicación se usa para habilitar funciones cercanas. No se guarda como historial personal.</p>
 
@@ -59,6 +63,7 @@
       <option value="semaforo">🚦 Semáforo dañado</option>
       <option value="obras">🚧 Obras</option>
       <option value="congestion">🐢 Congestión</option>
+      <option value="alarma">🚨</option>
     </select>
     <textarea id="description" maxlength="240" placeholder="Descripción opcional"></textarea>
 
@@ -193,6 +198,17 @@
     if (tg && tg.LocationManager && tg.LocationManager.openSettings) tg.LocationManager.openSettings();
   });
 
+  function showHome() {
+    reportCard.classList.add("hidden");
+    pickMapWrap.classList.add("hidden");
+    window.scrollTo({top: 0, behavior: "smooth"});
+  }
+
+  document.getElementById("navHome").addEventListener("click", showHome);
+  document.getElementById("navMap").addEventListener("click", () => {
+    document.getElementById("showMap").click();
+  });
+
   document.getElementById("showMap").addEventListener("click", () => {
     if (!currentLocation) return;
     const params = new URLSearchParams({
@@ -270,6 +286,19 @@
       resultEl.textContent = `✅ Incidente registrado con ID ${data.id}.`;
       document.getElementById("kind").value = "";
       document.getElementById("description").value = "";
+      reportLocation = currentLocation
+        ? { latitude: currentLocation.latitude, longitude: currentLocation.longitude }
+        : null;
+      if (pickMarker && pickMap) {
+        pickMap.removeLayer(pickMarker);
+        pickMarker = null;
+      }
+      pickMapWrap.classList.add("hidden");
+      setTimeout(() => {
+        reportCard.classList.add("hidden");
+        resultEl.textContent = "";
+        window.scrollTo({top: 0, behavior: "smooth"});
+      }, 700);
     } catch (error) {
       resultEl.textContent = "No se pudo registrar: " + error.message;
     }
