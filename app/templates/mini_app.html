@@ -5,80 +5,27 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Tráfico Seguro</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <style>
-    :root {
-      color-scheme: light dark;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-    body {
-      margin: 0;
-      background: var(--tg-theme-bg-color, #f6f7f9);
-      color: var(--tg-theme-text-color, #111827);
-    }
-    main {
-      max-width: 620px;
-      margin: 0 auto;
-      padding: 18px 16px 32px;
-    }
+    :root { color-scheme: light dark; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { margin: 0; background: var(--tg-theme-bg-color, #f6f7f9); color: var(--tg-theme-text-color, #111827); }
+    main { max-width: 620px; margin: 0 auto; padding: 18px 16px 32px; }
     h1 { margin: 0 0 8px; font-size: 24px; }
     p { line-height: 1.45; }
-    .card {
-      background: var(--tg-theme-secondary-bg-color, #ffffff);
-      border-radius: 16px;
-      padding: 16px;
-      margin-top: 14px;
-    }
-    .status {
-      font-weight: 700;
-      margin-bottom: 6px;
-    }
-    .muted {
-      opacity: .72;
-      font-size: 14px;
-    }
-    button, select, textarea, a.action {
-      box-sizing: border-box;
-      width: 100%;
-      border: 0;
-      border-radius: 12px;
-      padding: 13px 14px;
-      font: inherit;
-      margin-top: 10px;
-    }
-    button, a.action {
-      background: var(--tg-theme-button-color, #2481cc);
-      color: var(--tg-theme-button-text-color, white);
-      font-weight: 700;
-      text-align: center;
-      text-decoration: none;
-      display: block;
-      cursor: pointer;
-    }
-    button.secondary {
-      background: var(--tg-theme-secondary-bg-color, #e5e7eb);
-      color: var(--tg-theme-text-color, #111827);
-      outline: 1px solid rgba(127,127,127,.25);
-    }
-    button:disabled {
-      opacity: .45;
-      cursor: not-allowed;
-    }
-    select, textarea {
-      background: var(--tg-theme-bg-color, #f8fafc);
-      color: var(--tg-theme-text-color, #111827);
-      outline: 1px solid rgba(127,127,127,.25);
-    }
+    .card { background: var(--tg-theme-secondary-bg-color, #ffffff); border-radius: 16px; padding: 16px; margin-top: 14px; }
+    .status { font-weight: 700; margin-bottom: 6px; }
+    .muted { opacity: .72; font-size: 14px; }
+    button, select, textarea { box-sizing: border-box; width: 100%; border: 0; border-radius: 12px; padding: 13px 14px; font: inherit; margin-top: 10px; }
+    button { background: var(--tg-theme-button-color, #2481cc); color: var(--tg-theme-button-text-color, white); font-weight: 700; cursor: pointer; }
+    button.secondary { background: var(--tg-theme-secondary-bg-color, #e5e7eb); color: var(--tg-theme-text-color, #111827); outline: 1px solid rgba(127,127,127,.25); }
+    select, textarea { background: var(--tg-theme-bg-color, #f8fafc); color: var(--tg-theme-text-color, #111827); outline: 1px solid rgba(127,127,127,.25); }
     textarea { resize: vertical; min-height: 74px; }
     .hidden { display: none; }
-    .grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-    }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .grid button { margin-top: 0; }
     .ok { color: #15803d; }
     .warn { color: #b45309; }
-    .error { color: #b91c1c; }
+    #pickMap { height: 300px; border-radius: 12px; margin-top: 10px; overflow: hidden; }
   </style>
 </head>
 <body>
@@ -114,18 +61,33 @@
       <option value="congestion">🐢 Congestión</option>
     </select>
     <textarea id="description" maxlength="240" placeholder="Descripción opcional"></textarea>
-    <button id="submitReport">Registrar en mi ubicación actual</button>
+
+    <div class="status" style="margin-top:14px;">Ubicación del incidente</div>
+    <div class="grid">
+      <button id="useCurrentLocation">📍 Usar ubicación actual</button>
+      <button id="chooseOnMap" class="secondary">🗺 Elegir en mapa</button>
+    </div>
+    <div id="selectedLocationText" class="muted" style="margin-top:8px;">Usando tu ubicación actual.</div>
+    <div id="pickMapWrap" class="hidden">
+      <div id="pickMap"></div>
+      <div class="muted" style="margin-top:8px;">Toca el mapa en el punto exacto donde ocurrió el incidente. Puedes mover el mapa y volver a tocar para corregirlo.</div>
+    </div>
+
+    <button id="submitReport">Registrar incidente</button>
     <button id="cancelReport" class="secondary">Cancelar</button>
-    
     <div id="reportResult" class="muted"></div>
   </section>
 </main>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script>
 (() => {
   const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
   const radiusKm = {{ radius_km }};
   let currentLocation = null;
+  let reportLocation = null;
+  let pickMap = null;
+  let pickMarker = null;
 
   const statusEl = document.getElementById("locationStatus");
   const detailEl = document.getElementById("locationDetail");
@@ -135,6 +97,8 @@
   const reportCard = document.getElementById("reportCard");
   const coordsEl = document.getElementById("coords");
   const resultEl = document.getElementById("reportResult");
+  const selectedLocationText = document.getElementById("selectedLocationText");
+  const pickMapWrap = document.getElementById("pickMapWrap");
 
   function setStatus(title, detail, kind = "") {
     statusEl.textContent = title;
@@ -144,9 +108,8 @@
 
   function enableApp(location) {
     currentLocation = location;
-    const accuracy = location.horizontal_accuracy != null
-      ? ` · precisión aprox. ${Math.round(location.horizontal_accuracy)} m`
-      : "";
+    reportLocation = { latitude: location.latitude, longitude: location.longitude };
+    const accuracy = location.horizontal_accuracy != null ? ` · precisión aprox. ${Math.round(location.horizontal_accuracy)} m` : "";
     coordsEl.textContent = `Ubicación verificada${accuracy}`;
     menuCard.classList.remove("hidden");
     retryBtn.classList.add("hidden");
@@ -156,6 +119,7 @@
 
   function locationFailed(message, allowSettings = true) {
     currentLocation = null;
+    reportLocation = null;
     menuCard.classList.add("hidden");
     reportCard.classList.add("hidden");
     retryBtn.classList.remove("hidden");
@@ -170,15 +134,12 @@
     }
 
     const lm = tg.LocationManager;
-
     const ask = () => {
       if (!lm.isLocationAvailable) {
         locationFailed("Los servicios de ubicación no están disponibles en este dispositivo. Activa la ubicación del sistema e inténtalo nuevamente.");
         return;
       }
-
       setStatus("Solicitando ubicación…", "Telegram puede pedirte permiso la primera vez.");
-
       lm.getLocation((locationData) => {
         if (!locationData) {
           locationFailed("Telegram no pudo obtener tu ubicación. Revisa el permiso de ubicación e inténtalo nuevamente.");
@@ -188,19 +149,43 @@
       });
     };
 
-    if (lm.isInited) {
-      ask();
-    } else {
-      lm.init(ask);
+    if (lm.isInited) ask();
+    else lm.init(ask);
+  }
+
+  function setReportLocation(lat, lng, sourceText) {
+    reportLocation = { latitude: lat, longitude: lng };
+    selectedLocationText.textContent = sourceText;
+    if (pickMap) {
+      if (!pickMarker) pickMarker = L.marker([lat, lng]).addTo(pickMap);
+      else pickMarker.setLatLng([lat, lng]);
     }
+  }
+
+  function initPickMap() {
+    if (pickMap) {
+      setTimeout(() => pickMap.invalidateSize(), 50);
+      return;
+    }
+    pickMap = L.map("pickMap").setView([currentLocation.latitude, currentLocation.longitude], 16);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "&copy; OpenStreetMap contributors"
+    }).addTo(pickMap);
+
+    pickMap.on("click", (event) => {
+      setReportLocation(
+        event.latlng.lat,
+        event.latlng.lng,
+        `Punto elegido manualmente: ${event.latlng.lat.toFixed(6)}, ${event.latlng.lng.toFixed(6)}`
+      );
+    });
   }
 
   retryBtn.addEventListener("click", requestLocation);
 
   settingsBtn.addEventListener("click", () => {
-    if (tg && tg.LocationManager && tg.LocationManager.openSettings) {
-      tg.LocationManager.openSettings();
-    }
+    if (tg && tg.LocationManager && tg.LocationManager.openSettings) tg.LocationManager.openSettings();
   });
 
   document.getElementById("showMap").addEventListener("click", () => {
@@ -216,23 +201,48 @@
   document.getElementById("showReport").addEventListener("click", () => {
     reportCard.classList.remove("hidden");
     resultEl.textContent = "";
+    setReportLocation(
+      currentLocation.latitude,
+      currentLocation.longitude,
+      "Usando tu ubicación actual."
+    );
+  });
+
+  document.getElementById("useCurrentLocation").addEventListener("click", () => {
+    pickMapWrap.classList.add("hidden");
+    setReportLocation(
+      currentLocation.latitude,
+      currentLocation.longitude,
+      "Usando tu ubicación actual."
+    );
+  });
+
+  document.getElementById("chooseOnMap").addEventListener("click", () => {
+    pickMapWrap.classList.remove("hidden");
+    initPickMap();
+    setTimeout(() => {
+      pickMap.invalidateSize();
+      pickMap.setView([reportLocation.latitude, reportLocation.longitude], 16);
+      if (!pickMarker) pickMarker = L.marker([reportLocation.latitude, reportLocation.longitude]).addTo(pickMap);
+    }, 50);
+    selectedLocationText.textContent = "Toca el mapa para elegir el punto exacto.";
   });
 
   document.getElementById("cancelReport").addEventListener("click", () => {
     reportCard.classList.add("hidden");
+    pickMapWrap.classList.add("hidden");
   });
 
   document.getElementById("submitReport").addEventListener("click", async () => {
-    if (!currentLocation) {
-      locationFailed("La ubicación dejó de estar disponible. Vuelve a comprobarla.");
-      return;
-    }
-
     const kind = document.getElementById("kind").value;
     const description = document.getElementById("description").value.trim();
 
     if (!kind) {
       resultEl.textContent = "Selecciona un tipo de incidente.";
+      return;
+    }
+    if (!reportLocation) {
+      resultEl.textContent = "Selecciona la ubicación del incidente.";
       return;
     }
 
@@ -244,17 +254,13 @@
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({
           kind,
-          latitude: currentLocation.latitude,
-          longitude: currentLocation.longitude,
+          latitude: reportLocation.latitude,
+          longitude: reportLocation.longitude,
           description
         })
       });
-
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.detail || "No se pudo registrar el incidente.");
-      }
+      if (!response.ok) throw new Error(data.detail || "No se pudo registrar el incidente.");
 
       resultEl.textContent = `✅ Incidente registrado con ID ${data.id}.`;
       document.getElementById("kind").value = "";
@@ -268,7 +274,6 @@
     tg.ready();
     tg.expand();
   }
-
   requestLocation();
 })();
 </script>
