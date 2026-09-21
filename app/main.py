@@ -96,6 +96,7 @@ def nearby(
     lat: float = Query(..., ge=-90, le=90),
     lng: float = Query(..., ge=-180, le=180),
     radius_km: float = Query(DEFAULT_RADIUS_KM, gt=0, le=MAX_RADIUS_KM),
+    all_reports: bool = Query(False),
 ):
     cutoff = datetime.now(timezone.utc) - timedelta(hours=12)
     with SessionLocal() as db:
@@ -106,7 +107,7 @@ def nearby(
     result = []
     for item in rows:
         distance = haversine_km(lat, lng, item.latitude, item.longitude)
-        if distance <= radius_km:
+        if all_reports or distance <= radius_km:
             result.append({
                 "id": item.id,
                 "kind": item.kind,
@@ -119,7 +120,7 @@ def nearby(
             })
 
     result.sort(key=lambda x: x["distance_km"])
-    return {"radius_km": radius_km, "incidents": result}
+    return {"radius_km": radius_km, "all_reports": all_reports, "incidents": result}
 
 
 @app.post("/api/incidents/{incident_id}/confirm")
