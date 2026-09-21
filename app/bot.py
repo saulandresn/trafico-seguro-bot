@@ -1,6 +1,6 @@
 import os
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
+from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://localhost:8000").rstrip("/")
@@ -18,10 +18,27 @@ def mini_app_markup() -> InlineKeyboardMarkup:
     )
 
 
+async def configure_bot(application: Application) -> None:
+    await application.bot.set_my_commands([
+        BotCommand("start", "Iniciar Tráfico Seguro"),
+        BotCommand("help", "Ver ayuda"),
+    ])
+    await application.bot.set_my_description(
+        description=(
+            "Tráfico Seguro permite consultar y reportar incidentes viales "
+            "dentro de la provincia de Loja. Pulsa INICIAR para comenzar."
+        )
+    )
+    await application.bot.set_my_short_description(
+        short_description="Incidentes viales en Loja. Pulsa INICIAR para comenzar."
+    )
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Abre la aplicación para consultar actividad vial y reportar incidentes. "
-        "La aplicación comprobará si la ubicación está disponible en tu dispositivo antes de habilitar las funciones.",
+        "🚦 Bienvenido a Tráfico Seguro.\n\n"
+        "Consulta incidentes viales y contribuye con reportes dentro de la provincia de Loja. "
+        "Para comenzar, pulsa el botón de abajo.",
         reply_markup=mini_app_markup(),
     )
 
@@ -29,8 +46,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Pulsa «🚦 Abrir Tráfico Seguro». "
-        "Dentro de la Mini App se comprobará la disponibilidad de ubicación y, si hace falta, Telegram solicitará permiso. "
-        "Después podrás ver el mapa o reportar un incidente.",
+        "La Mini App comprobará tu ubicación, te mostrará un tutorial breve y, si estás dentro "
+        "de la provincia de Loja, podrás consultar y reportar incidentes.",
         reply_markup=mini_app_markup(),
     )
 
@@ -39,7 +56,7 @@ def build_application() -> Application:
     if not TOKEN:
         raise RuntimeError("Falta TELEGRAM_BOT_TOKEN")
 
-    app = Application.builder().token(TOKEN).build()
+    app = Application.builder().token(TOKEN).post_init(configure_bot).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_cmd))
     return app
