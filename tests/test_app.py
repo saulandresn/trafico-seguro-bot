@@ -275,3 +275,12 @@ def test_first_time_tutorial_is_present():
     assert "2. Consulta el mapa" in mini.text
     assert "3. Crea un reporte" in mini.text
     assert "4. Ayuda a mantenerlo actualizado" in mini.text
+
+
+
+def test_hidden_class_overrides_tutorial_overlay_display():
+    mini = client.get("/mini-app")
+    assert mini.status_code == 200
+    assert ".hidden { display:none !important; }" in mini.text
+    assert 'id="tutorialOverlay" class="tutorial-overlay hidden"' in mini.text
+    assert 'finishTutorial(true)' in mini.text
