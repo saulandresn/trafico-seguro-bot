@@ -260,3 +260,18 @@ def test_terms_and_region_ui_are_present():
     assert terms.status_code == 200
     assert "No es un servicio de emergencia" in terms.text
     assert "provincia de Loja" in terms.text
+
+
+
+def test_first_time_tutorial_is_present():
+    mini = client.get("/mini-app")
+    assert mini.status_code == 200
+    assert 'id="tutorialOverlay"' in mini.text
+    assert 'id="tutorialNext"' in mini.text
+    assert 'id="tutorialSkip"' in mini.text
+    assert 'id="openTutorial"' in mini.text
+    assert "traffic_tutorial_seen_v1" in mini.text
+    assert "1. Permite tu ubicación" in mini.text
+    assert "2. Consulta el mapa" in mini.text
+    assert "3. Crea un reporte" in mini.text
+    assert "4. Ayuda a mantenerlo actualizado" in mini.text
