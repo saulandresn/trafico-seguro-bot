@@ -52,6 +52,7 @@
   const userLat = {{ lat }};
   const userLng = {{ lng }};
   const radiusKm = {{ radius_km }};
+  const clientToken = localStorage.getItem("traffic_client_token") || "";
 
   const incidentTypes = {
     accidente: { emoji: "🚗", label: "Accidente" },
@@ -98,17 +99,27 @@
     url.searchParams.set("radius_km", radiusKm);
     if (showAll) url.searchParams.set("all_reports", "true");
 
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      headers: clientToken ? {"X-Client-Token": clientToken} : {}
+    });
     if (!response.ok) throw new Error("HTTP " + response.status);
     const data = await response.json();
 
     const bounds = [];
     data.incidents.forEach(item => {
       const meta = incidentTypes[item.kind] || { emoji: "📍", label: item.kind.replaceAll("_", " ") };
+      const ownerButton = item.owned_by_me
+        ? `<button onclick="removeIncident(${item.id})">🗑 Eliminar mi reporte</button>`
+        : "";
       const text = `
         <strong>${meta.emoji}${meta.label ? " " + meta.label : ""}</strong><br>
         ${item.description || "Sin descripción"}<br>
-        ${item.distance_km} km · ${item.confirmations} confirmación(es)
+        ${item.distance_km} km · ${item.confirmations} confirmación(es)<br>
+        Ya no está: ${item.gone_votes} · Incorrecto: ${item.incorrect_votes}<br><br>
+        <button onclick="voteIncident(${item.id}, 'confirm')">✅ Confirmar</button>
+        <button onclick="voteIncident(${item.id}, 'gone')">🟢 Ya no está</button>
+        <button onclick="voteIncident(${item.id}, 'incorrect')">⚠️ Incorrecto</button>
+        ${ownerButton}
       `;
       L.marker([item.lat, item.lng], { icon: emojiIcon(meta.emoji) })
         .addTo(incidentLayer)
@@ -130,13 +141,52 @@
     }
   }
 
+  let currentShowAll = false;
+
+  window.voteIncident = async function(id, action) {
+    if (!clientToken) {
+      alert("Abre el mapa desde la Mini App para participar.");
+      return;
+    }
+    const response = await fetch(`/api/incidents/${id}/vote`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "X-Client-Token": clientToken},
+      body: JSON.stringify({action})
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      alert(data.detail || "No se pudo registrar tu voto.");
+      return;
+    }
+    map.closePopup();
+    await loadIncidents(currentShowAll);
+  };
+
+  window.removeIncident = async function(id) {
+    if (!clientToken) return;
+    if (!confirm("¿Eliminar tu reporte?")) return;
+    const response = await fetch(`/api/incidents/${id}`, {
+      method: "DELETE",
+      headers: {"X-Client-Token": clientToken}
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      alert(data.detail || "No se pudo eliminar.");
+      return;
+    }
+    map.closePopup();
+    await loadIncidents(currentShowAll);
+  };
+
   document.getElementById("nearbyBtn").addEventListener("click", async () => {
+    currentShowAll = false;
     document.getElementById("nearbyBtn").classList.add("active");
     document.getElementById("allBtn").classList.remove("active");
     try { await loadIncidents(false); } catch { alert("No se pudo cargar la actividad cercana."); }
   });
 
   document.getElementById("allBtn").addEventListener("click", async () => {
+    currentShowAll = true;
     document.getElementById("allBtn").classList.add("active");
     document.getElementById("nearbyBtn").classList.remove("active");
     try { await loadIncidents(true); } catch { alert("No se pudieron cargar todos los reportes."); }
