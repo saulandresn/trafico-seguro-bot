@@ -5,210 +5,209 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Actividad vial</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
   <style>
-    html, body { margin: 0; font-family: system-ui, sans-serif; background: #f6f7f9; color: #111827; }
-    header { padding: 14px 16px; background: white; border-bottom: 1px solid #e5e7eb; }
-    header h1 { margin: 0 0 4px; font-size: 18px; }
-    header p { margin: 0; color: #6b7280; font-size: 13px; }
-    .toolbar { padding: 10px 16px; background: white; border-bottom: 1px solid #e5e7eb; display: flex; gap: 8px; }
-    .toolbar button { flex: 1; border: 0; border-radius: 10px; padding: 10px; font-weight: 700; cursor: pointer; }
-    .toolbar button.active { outline: 2px solid #111827; }
-    #map { height: 68vh; min-height: 420px; }
-    .legend { padding: 12px 16px; font-size: 13px; line-height: 1.7; }
-    .emoji-marker {
-      background: white;
-      border: 2px solid #111827;
-      border-radius: 50%;
-      width: 34px !important;
-      height: 34px !important;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 20px;
-      box-shadow: 0 2px 6px rgba(0,0,0,.22);
-    }
+    html, body { margin:0; font-family:system-ui,sans-serif; background:#f6f7f9; color:#111827; }
+    header { padding:12px 14px; background:white; border-bottom:1px solid #e5e7eb; }
+    header h1 { margin:0 0 4px; font-size:18px; }
+    header p { margin:0; color:#6b7280; font-size:13px; }
+    .toolbar { padding:8px 10px; background:white; border-bottom:1px solid #e5e7eb; display:flex; gap:6px; overflow-x:auto; }
+    .toolbar button,.chip { border:0; border-radius:10px; padding:9px 10px; font-weight:700; cursor:pointer; white-space:nowrap; }
+    .toolbar button.active,.chip.active { outline:2px solid #111827; }
+    .filters { padding:8px 10px; display:flex; gap:6px; overflow-x:auto; background:white; border-bottom:1px solid #e5e7eb; }
+    #map { height:58vh; min-height:360px; }
+    .panel { padding:10px 12px 90px; }
+    .incident-card { background:white; border-radius:12px; padding:12px; margin:8px 0; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+    .incident-card h3 { margin:0 0 4px; font-size:16px; }
+    .meta { color:#6b7280; font-size:13px; }
+    .trust { display:inline-block; margin-top:6px; padding:4px 7px; border-radius:999px; background:#eef2ff; font-size:12px; font-weight:700; }
+    .actions { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:8px; }
+    .actions button { border:0; border-radius:9px; padding:8px; font-weight:700; cursor:pointer; }
+    .emoji-marker { background:white; border:2px solid #111827; border-radius:50%; width:36px!important; height:36px!important; display:flex; align-items:center; justify-content:center; font-size:20px; box-shadow:0 2px 6px rgba(0,0,0,.22); }
+    .emoji-marker.strong { border-width:3px; transform:scale(1.08); }
+    .emoji-marker.review { opacity:.65; }
+    .bottom-nav { position:fixed; bottom:0; left:0; right:0; display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:#d1d5db; z-index:1000; }
+    .bottom-nav button { border:0; padding:12px 4px; background:white; font-weight:700; }
+    .search-zone { position:absolute; z-index:900; top:12px; left:50%; transform:translateX(-50%); border:0; border-radius:999px; padding:9px 14px; font-weight:700; box-shadow:0 2px 8px rgba(0,0,0,.18); }
   </style>
 </head>
 <body>
 <header>
   <h1>Actividad vial</h1>
-  <p id="scopeText">Mostrando incidentes dentro de {{ radius_km }} km.</p>
+  <p id="scopeText">Incidentes dentro de {{ radius_km }} km.</p>
 </header>
 
 <div class="toolbar">
-  <button id="homeBtn">🏠 Inicio</button>
-  <button id="nearbyBtn" class="active">📍 Cerca de mí</button>
-  <button id="allBtn">🌐 Ver todos</button>
+  <button id="nearbyBtn" class="active">📍 Cerca</button>
+  <button id="allBtn">🌐 Todos</button>
+  <button id="listBtn">📋 Lista</button>
 </div>
 
-<div id="map"></div>
-
-<div class="legend">
-  🚗 Accidente · ⛔ Vía cerrada · 🌊 Inundación · 🚦 Semáforo dañado ·
-  🚧 Obras · 🐢 Congestión · 🚨
+<div class="filters" id="filters">
+  <button class="chip active" data-kind="">Todos</button>
+  <button class="chip" data-kind="accidente">🚗</button>
+  <button class="chip" data-kind="via_cerrada">⛔</button>
+  <button class="chip" data-kind="inundacion">🌊</button>
+  <button class="chip" data-kind="semaforo">🚦</button>
+  <button class="chip" data-kind="obras">🚧</button>
+  <button class="chip" data-kind="congestion">🐢</button>
+  <button class="chip" data-kind="alarma">🚨</button>
 </div>
+
+<div style="position:relative">
+  <button id="searchHereBtn" class="search-zone">🔎 Buscar aquí</button>
+  <div id="map"></div>
+</div>
+
+<div class="panel" id="listPanel"></div>
+
+<nav class="bottom-nav">
+  <button id="homeBtn">🏠<br>Inicio</button>
+  <button id="mapBtn">🗺<br>Mapa</button>
+  <button id="reportBtn">➕<br>Reportar</button>
+  <button id="mineBtn">📋<br>Mis reportes</button>
+</nav>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script>
-  const userLat = {{ lat }};
-  const userLng = {{ lng }};
-  const radiusKm = {{ radius_km }};
-  const clientToken = localStorage.getItem("traffic_client_token") || "";
-
-  const incidentTypes = {
-    accidente: { emoji: "🚗", label: "Accidente" },
-    via_cerrada: { emoji: "⛔", label: "Vía cerrada" },
-    inundacion: { emoji: "🌊", label: "Inundación" },
-    semaforo: { emoji: "🚦", label: "Semáforo dañado" },
-    obras: { emoji: "🚧", label: "Obras" },
-    congestion: { emoji: "🐢", label: "Congestión" },
-    alarma: { emoji: "🚨", label: "" },
-    revision_oficial: { emoji: "🚨", label: "" }
+(() => {
+  const userLat={{ lat }};
+  const userLng={{ lng }};
+  const radiusKm={{ radius_km }};
+  const clientToken=localStorage.getItem("traffic_client_token")||"";
+  const kindsMeta={
+    accidente:["🚗","Accidente"],via_cerrada:["⛔","Vía cerrada"],inundacion:["🌊","Inundación"],
+    semaforo:["🚦","Semáforo dañado"],obras:["🚧","Obras"],congestion:["🐢","Congestión"],
+    alarma:["🚨",""],revision_oficial:["🚨",""]
   };
 
-  const map = L.map("map").setView([userLat, userLng], 14);
-  const incidentLayer = L.layerGroup().addTo(map);
+  let currentShowAll=false;
+  let selectedKind="";
+  let searchCenter={lat:userLat,lng:userLng};
+  let incidents=[];
 
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    attribution: "&copy; OpenStreetMap contributors"
-  }).addTo(map);
+  const map=L.map("map").setView([userLat,userLng],14);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"&copy; OpenStreetMap contributors"}).addTo(map);
+  L.circleMarker([userLat,userLng],{radius:7}).addTo(map).bindPopup("Tu ubicación");
+  const radiusCircle=L.circle([userLat,userLng],{radius:radiusKm*1000,fillOpacity:.04}).addTo(map);
+  const cluster=L.markerClusterGroup();
+  map.addLayer(cluster);
 
-  const radiusCircle = L.circle([userLat, userLng], {
-    radius: radiusKm * 1000,
-    fillOpacity: 0.04
-  }).addTo(map);
-
-  L.circleMarker([userLat, userLng], { radius: 7 })
-    .addTo(map)
-    .bindPopup("Tu ubicación");
-
-  function emojiIcon(emoji) {
-    return L.divIcon({
-      className: "emoji-marker",
-      html: emoji,
-      iconSize: [34, 34],
-      iconAnchor: [17, 17],
-      popupAnchor: [0, -18]
-    });
+  function ageText(sec){
+    if(sec<60)return "hace menos de 1 min";
+    if(sec<3600)return `hace ${Math.floor(sec/60)} min`;
+    if(sec<86400)return `hace ${Math.floor(sec/3600)} h`;
+    return `hace ${Math.floor(sec/86400)} d`;
+  }
+  function markerIcon(item){
+    const meta=kindsMeta[item.kind]||["📍",item.kind];
+    const cls=item.trust==="Alta confianza"?" strong":(item.trust==="En revisión"||item.trust==="Posiblemente resuelto"?" review":"");
+    return L.divIcon({className:"emoji-marker"+cls,html:meta[0],iconSize:[36,36],iconAnchor:[18,18]});
+  }
+  function headers(extra={}){
+    return Object.assign({},clientToken?{"X-Client-Token":clientToken}:{},extra);
   }
 
-  async function loadIncidents(showAll) {
-    incidentLayer.clearLayers();
-    const url = new URL("/api/incidents/nearby", window.location.origin);
-    url.searchParams.set("lat", userLat);
-    url.searchParams.set("lng", userLng);
-    url.searchParams.set("radius_km", radiusKm);
-    if (showAll) url.searchParams.set("all_reports", "true");
-
-    const response = await fetch(url, {
-      headers: clientToken ? {"X-Client-Token": clientToken} : {}
-    });
-    if (!response.ok) throw new Error("HTTP " + response.status);
-    const data = await response.json();
-
-    const bounds = [];
-    data.incidents.forEach(item => {
-      const meta = incidentTypes[item.kind] || { emoji: "📍", label: item.kind.replaceAll("_", " ") };
-      const ownerButton = item.owned_by_me
-        ? `<button onclick="removeIncident(${item.id})">🗑 Eliminar mi reporte</button>`
-        : "";
-      const text = `
-        <strong>${meta.emoji}${meta.label ? " " + meta.label : ""}</strong><br>
-        ${item.description || "Sin descripción"}<br>
-        ${item.distance_km} km · ${item.confirmations} confirmación(es)<br>
-        Ya no está: ${item.gone_votes} · Incorrecto: ${item.incorrect_votes}<br><br>
-        <button onclick="voteIncident(${item.id}, 'confirm')">✅ Confirmar</button>
-        <button onclick="voteIncident(${item.id}, 'gone')">🟢 Ya no está</button>
-        <button onclick="voteIncident(${item.id}, 'incorrect')">⚠️ Incorrecto</button>
-        ${ownerButton}
-      `;
-      L.marker([item.lat, item.lng], { icon: emojiIcon(meta.emoji), incidentId: item.id })
-        .addTo(incidentLayer)
-        .bindPopup(text);
-      bounds.push([item.lat, item.lng]);
-    });
-
-    document.getElementById("scopeText").textContent = showAll
-      ? "Mostrando todos los reportes activos disponibles."
-      : `Mostrando incidentes dentro de ${radiusKm} km.`;
-
-    radiusCircle.setStyle({ opacity: showAll ? 0 : 1, fillOpacity: showAll ? 0 : 0.04 });
-
-    if (showAll && bounds.length > 0) {
-      bounds.push([userLat, userLng]);
-      map.fitBounds(bounds, { padding: [28, 28], maxZoom: 15 });
-    } else if (!showAll) {
-      map.setView([userLat, userLng], 14);
-    }
+  async function fetchIncidents(){
+    const url=new URL("/api/incidents/nearby",location.origin);
+    url.searchParams.set("lat",searchCenter.lat);
+    url.searchParams.set("lng",searchCenter.lng);
+    url.searchParams.set("radius_km",currentShowAll?radiusKm:10);
+    if(currentShowAll)url.searchParams.set("all_reports","true");
+    if(selectedKind)url.searchParams.set("kinds",selectedKind);
+    const r=await fetch(url,{headers:headers()});
+    if(!r.ok)throw new Error("No se pudieron cargar los reportes");
+    const data=await r.json();
+    incidents=data.incidents;
+    render();
   }
 
-  let currentShowAll = false;
+  function popupHtml(item){
+    const meta=kindsMeta[item.kind]||["📍",item.kind];
+    const own=item.owned_by_me?`<button onclick="removeIncident(${item.id})">🗑 Eliminar mi reporte</button>`:"";
+    return `<strong>${meta[0]} ${meta[1]}</strong><br>
+      ${item.description||"Sin descripción"}<br>
+      ${ageText(item.age_seconds)} · ${item.distance_km} km<br>
+      <b>${item.trust}</b><br>
+      ✅ ${item.confirmations} · 🟢 ${item.gone_votes} · ⚠️ ${item.incorrect_votes}<br><br>
+      <button onclick="voteIncident(${item.id},'confirm')">✅ Confirmar${item.my_vote==='confirm'?' ✓':''}</button>
+      <button onclick="voteIncident(${item.id},'gone')">🟢 Ya no está${item.my_vote==='gone'?' ✓':''}</button>
+      <button onclick="voteIncident(${item.id},'incorrect')">⚠️ Incorrecto${item.my_vote==='incorrect'?' ✓':''}</button>
+      ${own}`;
+  }
 
-  window.voteIncident = async function(id, action) {
-    if (!clientToken) {
-      alert("Abre el mapa desde la Mini App para participar.");
-      return;
-    }
-    const response = await fetch(`/api/incidents/${id}/vote`, {
-      method: "POST",
-      headers: {"Content-Type": "application/json", "X-Client-Token": clientToken},
-      body: JSON.stringify({action})
+  function render(){
+    cluster.clearLayers();
+    const panel=document.getElementById("listPanel");
+    panel.innerHTML="";
+    incidents.forEach(item=>{
+      const m=L.marker([item.lat,item.lng],{icon:markerIcon(item)});
+      m.bindPopup(popupHtml(item));
+      cluster.addLayer(m);
+      const meta=kindsMeta[item.kind]||["📍",item.kind];
+      const card=document.createElement("div");
+      card.className="incident-card";
+      card.innerHTML=`<h3>${meta[0]} ${meta[1]}</h3>
+        <div>${item.description||"Sin descripción"}</div>
+        <div class="meta">${ageText(item.age_seconds)} · ${item.distance_km} km · ✅ ${item.confirmations}</div>
+        <span class="trust">${item.trust}</span>
+        <div class="actions">
+          <button data-action="confirm">✅ Confirmar</button>
+          <button data-action="gone">🟢 Ya no está</button>
+        </div>`;
+      card.querySelector('[data-action="confirm"]').onclick=()=>voteIncident(item.id,"confirm");
+      card.querySelector('[data-action="gone"]').onclick=()=>voteIncident(item.id,"gone");
+      card.onclick=(e)=>{if(e.target.tagName!=="BUTTON"){map.setView([item.lat,item.lng],17);m.openPopup();}};
+      panel.appendChild(card);
     });
-    const data = await response.json();
-    if (!response.ok) {
-      alert(data.detail || "No se pudo registrar tu voto.");
-      return;
-    }
-    map.closePopup();
-    incidentLayer.eachLayer(layer => {
-      if (layer.options && layer.options.incidentId === id) {
-        incidentLayer.removeLayer(layer);
-      }
-    });
-    await loadIncidents(currentShowAll);
+    document.getElementById("scopeText").textContent=currentShowAll
+      ? `Mostrando ${incidents.length} reportes activos.`
+      : `Mostrando ${incidents.length} reportes en esta zona.`;
+  }
+
+  window.voteIncident=async(id,action)=>{
+    if(!clientToken){alert("Abre el mapa desde la Mini App para participar.");return;}
+    const r=await fetch(`/api/incidents/${id}/vote`,{method:"POST",headers:headers({"Content-Type":"application/json"}),body:JSON.stringify({action})});
+    const data=await r.json();
+    if(!r.ok){alert(data.detail||"No se pudo registrar el voto");return;}
+    map.closePopup(); await fetchIncidents();
   };
 
-  window.removeIncident = async function(id) {
-    if (!clientToken) return;
-    if (!confirm("¿Eliminar tu reporte?")) return;
-    const response = await fetch(`/api/incidents/${id}`, {
-      method: "DELETE",
-      headers: {"X-Client-Token": clientToken}
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      alert(data.detail || "No se pudo eliminar.");
-      return;
-    }
-    map.closePopup();
-    incidentLayer.eachLayer(layer => {
-      if (layer.options && layer.options.incidentId === id) {
-        incidentLayer.removeLayer(layer);
-      }
-    });
-    await loadIncidents(currentShowAll);
+  window.removeIncident=async(id)=>{
+    if(!confirm("¿Eliminar tu reporte?"))return;
+    const r=await fetch(`/api/incidents/${id}`,{method:"DELETE",headers:headers()});
+    const data=await r.json();
+    if(!r.ok){alert(data.detail||"No se pudo eliminar");return;}
+    incidents=incidents.filter(x=>x.id!==id); map.closePopup(); render();
   };
 
-  document.getElementById("homeBtn").addEventListener("click", () => {
-    window.location.href = "/mini-app";
+  document.querySelectorAll(".chip").forEach(btn=>btn.onclick=()=>{
+    document.querySelectorAll(".chip").forEach(x=>x.classList.remove("active"));
+    btn.classList.add("active"); selectedKind=btn.dataset.kind; fetchIncidents();
   });
+  document.getElementById("nearbyBtn").onclick=()=>{
+    currentShowAll=false; searchCenter={lat:userLat,lng:userLng};
+    radiusCircle.setStyle({opacity:1,fillOpacity:.04});
+    map.setView([userLat,userLng],14); fetchIncidents();
+  };
+  document.getElementById("allBtn").onclick=()=>{
+    currentShowAll=true; radiusCircle.setStyle({opacity:0,fillOpacity:0}); fetchIncidents().then(()=>{
+      if(incidents.length){map.fitBounds(incidents.map(x=>[x.lat,x.lng]),{padding:[30,30],maxZoom:15});}
+    });
+  };
+  document.getElementById("searchHereBtn").onclick=()=>{
+    currentShowAll=false; const c=map.getCenter(); searchCenter={lat:c.lat,lng:c.lng}; fetchIncidents();
+  };
+  document.getElementById("listBtn").onclick=()=>document.getElementById("listPanel").scrollIntoView({behavior:"smooth"});
+  document.getElementById("homeBtn").onclick=()=>location.href="/mini-app";
+  document.getElementById("mapBtn").onclick=()=>document.getElementById("map").scrollIntoView({behavior:"smooth"});
+  document.getElementById("reportBtn").onclick=()=>location.href="/mini-app#report";
+  document.getElementById("mineBtn").onclick=()=>location.href="/mini-app#mine";
 
-  document.getElementById("nearbyBtn").addEventListener("click", async () => {
-    currentShowAll = false;
-    document.getElementById("nearbyBtn").classList.add("active");
-    document.getElementById("allBtn").classList.remove("active");
-    try { await loadIncidents(false); } catch { alert("No se pudo cargar la actividad cercana."); }
-  });
-
-  document.getElementById("allBtn").addEventListener("click", async () => {
-    currentShowAll = true;
-    document.getElementById("allBtn").classList.add("active");
-    document.getElementById("nearbyBtn").classList.remove("active");
-    try { await loadIncidents(true); } catch { alert("No se pudieron cargar todos los reportes."); }
-  });
-
-  loadIncidents(false).catch(() => alert("No se pudo cargar la actividad cercana."));
+  fetchIncidents().catch(e=>alert(e.message));
+})();
 </script>
 </body>
 </html>
