@@ -37,6 +37,17 @@
     .switch-row { display:flex; align-items:center; justify-content:space-between; gap:12px; }
     .switch-row input { width:20px; height:20px; }
     .rep { display:inline-block; padding:4px 8px; border-radius:999px; background:rgba(36,129,204,.12); font-size:12px; font-weight:700; margin-top:6px; }
+    .tutorial-overlay { position:fixed; inset:0; z-index:3000; background:rgba(0,0,0,.58); display:flex; align-items:center; justify-content:center; padding:18px; }
+    .tutorial-box { width:min(100%,430px); background:var(--tg-theme-secondary-bg-color,#fff); color:var(--tg-theme-text-color,#111827); border-radius:20px; padding:20px; box-shadow:0 18px 60px rgba(0,0,0,.28); }
+    .tutorial-icon { font-size:48px; text-align:center; margin-bottom:8px; }
+    .tutorial-box h2 { margin:0 0 8px; text-align:center; }
+    .tutorial-box p { margin:0; line-height:1.5; }
+    .tutorial-progress { display:flex; justify-content:center; gap:7px; margin:16px 0 4px; }
+    .tutorial-dot { width:8px; height:8px; border-radius:50%; background:rgba(127,127,127,.35); }
+    .tutorial-dot.active { background:var(--tg-theme-button-color,#2481cc); }
+    .tutorial-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
+    .tutorial-actions button { margin-top:0; }
+    .help-btn { margin-top:12px; }
   </style>
 </head>
 <body>
@@ -73,6 +84,7 @@
       <button id="showMap">🗺 Ver mapa</button>
       <button id="showReport">➕ Reportar</button>
     </div>
+    <button id="openTutorial" class="secondary help-btn">❓ Cómo usar la app</button>
     <div class="switch-row" style="margin-top:14px">
       <div>
         <b>🔔 Alertas cercanas</b>
@@ -125,6 +137,19 @@
   </section>
 </main>
 
+<div id="tutorialOverlay" class="tutorial-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="tutorialTitle">
+  <div class="tutorial-box">
+    <div id="tutorialIcon" class="tutorial-icon">📍</div>
+    <h2 id="tutorialTitle">Bienvenido a Tráfico Seguro</h2>
+    <p id="tutorialText" class="muted"></p>
+    <div id="tutorialProgress" class="tutorial-progress"></div>
+    <div class="tutorial-actions">
+      <button id="tutorialSkip" class="secondary">Omitir</button>
+      <button id="tutorialNext">Siguiente</button>
+    </div>
+  </div>
+</div>
+
 <nav class="bottom-nav">
   <button id="navHome">🏠<br>Inicio</button>
   <button id="navMap">🗺<br>Mapa</button>
@@ -154,6 +179,29 @@
   let alertTimer=null;
   let editIncidentId=null;
   let seenIncidentIds=new Set(JSON.parse(localStorage.getItem("traffic_seen_incidents")||"[]"));
+  let tutorialStep=0;
+  const tutorialSteps=[
+    {
+      icon:"📍",
+      title:"1. Permite tu ubicación",
+      text:"La app usa tu ubicación para comprobar si estás dentro de la provincia de Loja y mostrar actividad cercana. Tu ubicación actual no se guarda como historial."
+    },
+    {
+      icon:"🗺",
+      title:"2. Consulta el mapa",
+      text:"Pulsa «Mapa» para ver incidentes activos. Puedes filtrar por tipo, revisar reportes cercanos o mover el mapa para consultar otra zona."
+    },
+    {
+      icon:"➕",
+      title:"3. Crea un reporte",
+      text:"Pulsa «Reportar», elige el tipo y usa tu ubicación actual o marca el punto exacto en el mapa. Solo se aceptan reportes dentro de la provincia de Loja."
+    },
+    {
+      icon:"✅",
+      title:"4. Ayuda a mantenerlo actualizado",
+      text:"Puedes confirmar reportes de otros usuarios o indicar que ya no están. Tus propios reportes se pueden editar, compartir o eliminar desde «Mis reportes»."
+    }
+  ];
 
   const $=id=>document.getElementById(id);
   const authHeaders=extra=>{
@@ -183,6 +231,27 @@
 
   function setStatus(title,detail,kind=""){
     statusEl.textContent=title; statusEl.className="status "+kind; detailEl.textContent=detail||"";
+  }
+
+  function renderTutorial(){
+    const step=tutorialSteps[tutorialStep];
+    $("tutorialIcon").textContent=step.icon;
+    $("tutorialTitle").textContent=step.title;
+    $("tutorialText").textContent=step.text;
+    $("tutorialProgress").innerHTML=tutorialSteps.map((_,i)=>`<span class="tutorial-dot ${i===tutorialStep?"active":""}"></span>`).join("");
+    $("tutorialNext").textContent=tutorialStep===tutorialSteps.length-1?"Empezar":"Siguiente";
+  }
+
+  function showTutorial(){
+    tutorialStep=0;
+    renderTutorial();
+    $("tutorialOverlay").classList.remove("hidden");
+  }
+
+  function finishTutorial(startLocation=true){
+    localStorage.setItem("traffic_tutorial_seen_v1","1");
+    $("tutorialOverlay").classList.add("hidden");
+    if(startLocation&&!currentLocation)requestLocation();
   }
   function showOnly(section){
     [reportCard,mineCard].forEach(x=>x.classList.add("hidden"));
@@ -393,6 +462,17 @@
     if($("alertsToggle").checked){checkAlerts();alertTimer=setInterval(checkAlerts,60000);}
   }
 
+  $("tutorialNext").onclick=()=>{
+    if(tutorialStep<tutorialSteps.length-1){
+      tutorialStep+=1;
+      renderTutorial();
+    }else{
+      finishTutorial(true);
+    }
+  };
+  $("tutorialSkip").onclick=()=>finishTutorial(true);
+  $("openTutorial").onclick=()=>showTutorial();
+
   $("acceptTerms").onclick=async()=>{
     if(!$("termsCheckbox").checked){
       $("termsResult").textContent="Debes marcar la casilla de aceptación.";
@@ -490,7 +570,11 @@
 
   if("serviceWorker" in navigator)navigator.serviceWorker.register("/service-worker.js").catch(()=>{});
   if(tg){tg.ready();tg.expand();}
-  requestLocation();
+  if(localStorage.getItem("traffic_tutorial_seen_v1")==="1"){
+    requestLocation();
+  }else{
+    showTutorial();
+  }
 })();
 </script>
 </body>
