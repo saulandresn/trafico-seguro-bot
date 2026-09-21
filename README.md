@@ -84,4 +84,16 @@ Antes de abrirlo a usuarios reales conviene añadir autenticación de reportes, 
 
 ## Release
 
-Current Railway release includes Mini App location checks, exact incident placement, all-reports map view, anonymous report ownership, confirmations, resolved/incorrect feedback, and owner deletion. Release trigger: final.
+Current Railway release includes:
+- Mini App location checks and exact manual incident placement
+- nearby/all reports map modes, zone search, filters, list view and marker clustering
+- report age, per-type automatic expiration and trust states
+- anonymous ownership, My Reports, confirmations, resolved/incorrect feedback and owner deletion
+- duplicate detection and confirmation of existing reports
+- per-device report rate limiting
+- quick descriptions and distance warnings for manual points
+- live nearby alerts while the Mini App is open, without storing the user's current location server-side
+- statistics and a protected administration dashboard
+- basic PWA manifest/service worker support
+
+Set `ADMIN_KEY` in production to protect `/admin?key=...`.
