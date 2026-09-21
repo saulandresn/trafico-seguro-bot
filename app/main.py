@@ -25,7 +25,7 @@ USER_REPORTABLE_KINDS = {
     "congestion",
     "obras",
 }
-OFFICIAL_ONLY_KINDS = {"control_vial_oficial"}
+OFFICIAL_ONLY_KINDS = {"revision_oficial"}
 ALLOWED_KINDS = USER_REPORTABLE_KINDS | OFFICIAL_ONLY_KINDS
 
 DEFAULT_RADIUS_KM = float(os.getenv("SEARCH_RADIUS_KM", "3"))
