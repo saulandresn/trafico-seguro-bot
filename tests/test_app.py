@@ -284,3 +284,13 @@ def test_hidden_class_overrides_tutorial_overlay_display():
     assert ".hidden { display:none !important; }" in mini.text
     assert 'id="tutorialOverlay" class="tutorial-overlay hidden"' in mini.text
     assert 'finishTutorial(true)' in mini.text
+
+
+
+def test_tutorial_skip_and_start_force_overlay_closed():
+    mini = client.get("/mini-app")
+    assert mini.status_code == 200
+    assert 'overlay.hidden=true' in mini.text
+    assert 'overlay.style.display="none"' in mini.text
+    assert 'overlay.setAttribute("aria-hidden","true")' in mini.text
+    assert '$("tutorialSkip").onclick=()=>finishTutorial(true);' in mini.text
