@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Reporte #{{ incident.id }} · Tráfico Seguro</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <style>
+    body{margin:0;font-family:system-ui,sans-serif;background:#f6f7f9;color:#111827}
+    main{max-width:680px;margin:auto;padding:18px}
+    .card{background:white;border-radius:16px;padding:16px;margin-top:12px}
+    #map{height:320px;border-radius:12px;margin-top:12px}
+    button{width:100%;border:0;border-radius:12px;padding:12px;font-weight:700;margin-top:10px;cursor:pointer}
+    .muted{color:#6b7280;font-size:14px}
+  </style>
+</head>
+<body>
+<main>
+  <h1>Reporte vial #{{ incident.id }}</h1>
+  <section class="card">
+    <b id="kind">{{ incident.kind }}</b>
+    <p>{{ incident.description or "Sin descripción" }}</p>
+    <div class="muted">✅ {{ incident.confirmations + counts.confirm }} confirmaciones</div>
+    <div id="map"></div>
+    <button id="shareBtn">🔗 Compartir</button>
+    <button id="openMapBtn">🗺 Abrir mapa</button>
+  </section>
+</main>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+const lat={{ incident.latitude }};
+const lng={{ incident.longitude }};
+const id={{ incident.id }};
+const map=L.map("map").setView([lat,lng],17);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"&copy; OpenStreetMap contributors"}).addTo(map);
+L.marker([lat,lng]).addTo(map).bindPopup("Reporte #"+id).openPopup();
+
+document.getElementById("shareBtn").onclick=async()=>{
+  const url=location.href;
+  try{
+    if(navigator.share)await navigator.share({title:"Tráfico Seguro",text:"Reporte vial #"+id,url});
+    else{await navigator.clipboard.writeText(url);alert("Enlace copiado.");}
+  }catch(e){if(e.name!=="AbortError")alert("No se pudo compartir.");}
+};
+document.getElementById("openMapBtn").onclick=()=>{
+  location.href=`/map?lat=${lat}&lng=${lng}&radius_km=3`;
+};
+</script>
+</body>
+</html>
