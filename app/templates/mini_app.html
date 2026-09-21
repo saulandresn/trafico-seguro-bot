@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#2481cc" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <title>Tráfico Seguro</title>
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <style>
     :root { color-scheme:light dark; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
@@ -28,12 +28,15 @@
     #pickMap { height:300px; border-radius:12px; margin-top:10px; overflow:hidden; }
     .quick { display:flex; gap:6px; overflow-x:auto; padding-top:8px; }
     .quick button { width:auto; margin:0; padding:8px 10px; white-space:nowrap; font-size:13px; }
-    .mine-item { border-top:1px solid rgba(127,127,127,.22); padding:10px 0; }
+    .mine-item { border-top:1px solid rgba(127,127,127,.22); padding:12px 0; }
     .mine-item:first-child { border-top:0; }
+    .mine-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; }
+    .mine-actions button { margin-top:0; }
     .bottom-nav { position:fixed; left:0; right:0; bottom:0; display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:#d1d5db; z-index:1000; }
     .bottom-nav button { border-radius:0; margin:0; padding:11px 3px; background:var(--tg-theme-secondary-bg-color,#fff); color:var(--tg-theme-text-color,#111827); font-size:12px; }
     .switch-row { display:flex; align-items:center; justify-content:space-between; gap:12px; }
     .switch-row input { width:20px; height:20px; }
+    .rep { display:inline-block; padding:4px 8px; border-radius:999px; background:rgba(36,129,204,.12); font-size:12px; font-weight:700; margin-top:6px; }
   </style>
 </head>
 <body>
@@ -51,6 +54,7 @@
   <section class="card hidden" id="homeCard">
     <div class="status ok">✅ Ubicación disponible</div>
     <div id="coords" class="muted"></div>
+    <div id="reputation" class="rep hidden"></div>
     <div class="grid" style="margin-top:12px">
       <button id="showMap">🗺 Ver mapa</button>
       <button id="showReport">➕ Reportar</button>
@@ -65,7 +69,7 @@
   </section>
 
   <section class="card hidden" id="reportCard">
-    <div class="status">➕ Reportar incidente</div>
+    <div class="status" id="reportTitle">➕ Reportar incidente</div>
     <select id="kind">
       <option value="">Selecciona el tipo</option>
       <option value="accidente">🚗 Accidente</option>
@@ -118,7 +122,9 @@
 <script>
 (() => {
   const tg=window.Telegram&&window.Telegram.WebApp?window.Telegram.WebApp:null;
+  const telegramInitData=tg&&tg.initData?tg.initData:"";
   const radiusKm={{ radius_km }};
+
   let clientToken=localStorage.getItem("traffic_client_token");
   if(!clientToken){
     clientToken=(crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2));
@@ -130,10 +136,17 @@
   let pickMap=null;
   let pickMarker=null;
   let alertTimer=null;
+  let editIncidentId=null;
   let seenIncidentIds=new Set(JSON.parse(localStorage.getItem("traffic_seen_incidents")||"[]"));
 
   const $=id=>document.getElementById(id);
-  const headers=extra=>Object.assign({"X-Client-Token":clientToken},extra||{});
+  const authHeaders=extra=>Object.assign(
+    {
+      "X-Telegram-Init-Data":telegramInitData,
+      "X-Client-Token":clientToken
+    },
+    extra||{}
+  );
   const statusEl=$("locationStatus"), detailEl=$("locationDetail");
   const reportCard=$("reportCard"), mineCard=$("mineCard"), homeCard=$("homeCard");
   const pickMapWrap=$("pickMapWrap"), resultEl=$("reportResult");
@@ -170,6 +183,14 @@
       $("distanceWarning").classList.remove("hidden");
     }else $("distanceWarning").classList.add("hidden");
   }
+  async function loadReputation(){
+    if(!telegramInitData)return;
+    const r=await fetch("/api/me/reputation",{headers:authHeaders()});
+    if(!r.ok)return;
+    const rep=await r.json();
+    $("reputation").textContent=`Reputación: ${rep.score}/100 · peso ${rep.weight}×`;
+    $("reputation").classList.remove("hidden");
+  }
   function enableApp(location){
     currentLocation=location;
     reportLocation={latitude:location.latitude,longitude:location.longitude};
@@ -178,7 +199,7 @@
     homeCard.classList.remove("hidden");
     $("retryLocation").classList.add("hidden"); $("openSettings").classList.add("hidden");
     setStatus("✅ Ubicación disponible","Mapa, reportes y alertas ya están habilitados.","ok");
-    loadStats(); startAlertsIfEnabled(); handleHash();
+    loadStats(); loadReputation(); startAlertsIfEnabled(); handleHash();
   }
   function locationFailed(message,allowSettings=true){
     currentLocation=null; reportLocation=null; homeCard.classList.add("hidden");
@@ -187,6 +208,10 @@
     setStatus("Ubicación no disponible",message,"warn");
   }
   function requestLocation(){
+    if(!telegramInitData){
+      locationFailed("Abre esta Mini App desde el botón del bot en Telegram.",false);
+      return;
+    }
     if(!tg||!tg.LocationManager){locationFailed("Esta versión de Telegram no ofrece ubicación para Mini Apps.",false);return;}
     const lm=tg.LocationManager;
     const ask=()=>{
@@ -218,6 +243,9 @@
     });
   }
   function resetReport(){
+    editIncidentId=null;
+    $("reportTitle").textContent="➕ Reportar incidente";
+    $("submitReport").textContent="Registrar incidente";
     $("kind").value=""; $("description").value=""; resultEl.textContent="";
     $("quickDescriptions").innerHTML=""; $("distanceWarning").classList.add("hidden");
     pickMapWrap.classList.add("hidden");
@@ -225,26 +253,64 @@
     reportLocation=currentLocation?{latitude:currentLocation.latitude,longitude:currentLocation.longitude}:null;
     $("selectedLocationText").textContent="Usando tu ubicación actual.";
   }
+  function startEdit(item){
+    editIncidentId=item.id;
+    $("reportTitle").textContent=`✏️ Editar reporte #${item.id}`;
+    $("submitReport").textContent="Guardar cambios";
+    $("kind").value=item.kind;
+    $("description").value=item.description||"";
+    renderQuick();
+    setReportLocation(item.lat,item.lng,`Ubicación actual del reporte: ${item.lat.toFixed(6)}, ${item.lng.toFixed(6)}`);
+    showOnly(reportCard);
+  }
 
+  async function shareIncident(item){
+    const url=new URL(item.share_url||`/incident/${item.id}`,location.origin).href;
+    const text=`Reporte vial #${item.id}`;
+    try{
+      if(navigator.share){await navigator.share({title:"Tráfico Seguro",text,url});}
+      else{await navigator.clipboard.writeText(url);alert("Enlace copiado.");}
+    }catch(e){
+      if(e.name!=="AbortError")alert("No se pudo compartir el enlace.");
+    }
+  }
   async function vote(id,action){
-    const r=await fetch(`/api/incidents/${id}/vote`,{method:"POST",headers:headers({"Content-Type":"application/json"}),body:JSON.stringify({action})});
+    const r=await fetch(`/api/incidents/${id}/vote`,{
+      method:"POST",
+      headers:authHeaders({"Content-Type":"application/json"}),
+      body:JSON.stringify({action})
+    });
     const data=await r.json(); if(!r.ok)throw new Error(data.detail||"No se pudo votar"); return data;
   }
   async function loadMine(){
     if(!currentLocation)return;
     mineCard.classList.remove("hidden"); $("mineList").textContent="Cargando…";
     const url=`/api/incidents/mine?lat=${currentLocation.latitude}&lng=${currentLocation.longitude}`;
-    const r=await fetch(url,{headers:headers()}); const data=await r.json();
+    const r=await fetch(url,{headers:authHeaders()}); const data=await r.json();
     if(!r.ok){$("mineList").textContent=data.detail||"No se pudo cargar";return;}
     $("mineList").innerHTML="";
     if(!data.incidents.length){$("mineList").textContent="Todavía no tienes reportes.";return;}
     data.incidents.forEach(item=>{
       const row=document.createElement("div"); row.className="mine-item";
       row.innerHTML=`<b>#${item.id} · ${item.kind.replaceAll("_"," ")}</b><br>
-        <span class="muted">${item.active?"Activo":"Cerrado"} · ${item.trust} · ✅ ${item.confirmations}</span>
-        ${item.active?'<button class="secondary">🗑 Eliminar</button>':""}`;
-      const b=row.querySelector("button");
-      if(b)b.onclick=async()=>{if(!confirm("¿Eliminar este reporte?"))return;await fetch(`/api/incidents/${item.id}`,{method:"DELETE",headers:headers()});loadMine();};
+        <span class="muted">${item.active?"Activo":"Cerrado"} · ${item.trust} · ✅ ${item.confirmations} · reputación ${item.owner_reputation}/100</span>
+        <div class="mine-actions">
+          ${item.active?'<button data-action="edit" class="secondary">✏️ Editar</button>':""}
+          <button data-action="share" class="secondary">🔗 Compartir</button>
+          ${item.active?'<button data-action="delete" class="secondary">🗑 Eliminar</button>':""}
+        </div>`;
+      const edit=row.querySelector('[data-action="edit"]');
+      const share=row.querySelector('[data-action="share"]');
+      const del=row.querySelector('[data-action="delete"]');
+      if(edit)edit.onclick=()=>startEdit(item);
+      if(share)share.onclick=()=>shareIncident(item);
+      if(del)del.onclick=async()=>{
+        if(!confirm("¿Eliminar este reporte?"))return;
+        const dr=await fetch(`/api/incidents/${item.id}`,{method:"DELETE",headers:authHeaders()});
+        const dd=await dr.json();
+        if(!dr.ok){alert(dd.detail||"No se pudo eliminar");return;}
+        loadMine(); loadStats();
+      };
       $("mineList").appendChild(row);
     });
   }
@@ -256,7 +322,7 @@
   async function checkAlerts(){
     if(!currentLocation||!$("alertsToggle").checked)return;
     const url=`/api/incidents/nearby?lat=${currentLocation.latitude}&lng=${currentLocation.longitude}&radius_km=${radiusKm}`;
-    const r=await fetch(url,{headers:headers()}); if(!r.ok)return;
+    const r=await fetch(url,{headers:authHeaders()}); if(!r.ok)return;
     const data=await r.json();
     const fresh=data.incidents.filter(x=>!seenIncidentIds.has(x.id));
     data.incidents.forEach(x=>seenIncidentIds.add(x.id));
@@ -279,8 +345,8 @@
     if(!currentLocation)return;
     location.href=`/map?lat=${currentLocation.latitude}&lng=${currentLocation.longitude}&radius_km=${radiusKm}`;
   };
-  $("showReport").onclick=$("navReport").onclick=()=>{showOnly(reportCard);resetReport();};
-  $("navHome").onclick=()=>showOnly(null);
+  $("showReport").onclick=$("navReport").onclick=()=>{resetReport();showOnly(reportCard);};
+  $("navHome").onclick=()=>{resetReport();showOnly(null);};
   $("navMine").onclick=()=>{showOnly(mineCard);loadMine();};
   $("useCurrentLocation").onclick=()=>{pickMapWrap.classList.add("hidden");setReportLocation(currentLocation.latitude,currentLocation.longitude,"Usando tu ubicación actual.");};
   $("chooseOnMap").onclick=()=>{
@@ -297,29 +363,38 @@
     if(!kind){resultEl.textContent="Selecciona un tipo.";return;}
     if(!reportLocation){resultEl.textContent="Selecciona la ubicación.";return;}
     const d=currentLocation?haversine(currentLocation.latitude,currentLocation.longitude,reportLocation.latitude,reportLocation.longitude):0;
-    if(d>5&&!confirm(`El punto está a ${d.toFixed(1)} km de ti. ¿Registrar de todos modos?`))return;
+    if(d>5&&!confirm(`El punto está a ${d.toFixed(1)} km de ti. ¿Guardar de todos modos?`))return;
 
-    resultEl.textContent="Registrando…";
-    const r=await fetch("/api/incidents",{method:"POST",headers:headers({"Content-Type":"application/json"}),body:JSON.stringify({kind,latitude:reportLocation.latitude,longitude:reportLocation.longitude,description})});
+    resultEl.textContent=editIncidentId?"Guardando cambios…":"Registrando…";
+    const endpoint=editIncidentId?`/api/incidents/${editIncidentId}`:"/api/incidents";
+    const method=editIncidentId?"PUT":"POST";
+    const r=await fetch(endpoint,{
+      method,
+      headers:authHeaders({"Content-Type":"application/json"}),
+      body:JSON.stringify({kind,latitude:reportLocation.latitude,longitude:reportLocation.longitude,description})
+    });
     const data=await r.json();
 
-    if(r.status===409&&data.duplicate_id){
+    if(!editIncidentId&&r.status===409&&data.duplicate_id){
       if(confirm("Ya existe un reporte similar muy cerca. ¿Quieres confirmarlo en lugar de crear otro?")){
-        try{await vote(data.duplicate_id,"confirm");resultEl.textContent="✅ Reporte existente confirmado.";setTimeout(()=>{resetReport();showOnly(null);},600);}
-        catch(e){resultEl.textContent=e.message;}
+        try{
+          await vote(data.duplicate_id,"confirm");
+          resultEl.textContent="✅ Reporte existente confirmado.";
+          setTimeout(()=>{resetReport();showOnly(null);},600);
+        }catch(e){resultEl.textContent=e.message;}
       }else resultEl.textContent="No se creó un duplicado.";
       return;
     }
-    if(!r.ok){resultEl.textContent=data.detail||"No se pudo registrar.";return;}
+    if(!r.ok){resultEl.textContent=data.detail||"No se pudo guardar.";return;}
 
-    resultEl.textContent=`✅ Reporte #${data.id} registrado.`;
+    resultEl.textContent=editIncidentId?"✅ Cambios guardados.":`✅ Reporte #${data.id} registrado.`;
     seenIncidentIds.add(data.id);
-    setTimeout(()=>{resetReport();showOnly(null);loadStats();},600);
+    setTimeout(()=>{resetReport();showOnly(null);loadStats();loadReputation();},600);
   };
 
   function handleHash(){
-    if(location.hash==="#report"){$("navReport").click();}
-    else if(location.hash==="#mine"){$("navMine").click();}
+    if(location.hash==="#report")$("navReport").click();
+    else if(location.hash==="#mine")$("navMine").click();
   }
   window.addEventListener("hashchange",handleHash);
 
