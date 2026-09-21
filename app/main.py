@@ -33,7 +33,6 @@ DEFAULT_RADIUS_KM = float(os.getenv("SEARCH_RADIUS_KM", "3"))
 MAX_RADIUS_KM = 10.0
 OFFICIAL_REPORT_KEY = os.getenv("OFFICIAL_REPORT_KEY", "")
 ADMIN_KEY = os.getenv("ADMIN_KEY", "")
-AUTO_CLOSE_VOTES = 3
 RATE_LIMIT_COUNT = 5
 RATE_LIMIT_WINDOW_MINUTES = 15
 DUPLICATE_RADIUS_KM = 0.2
@@ -100,7 +99,9 @@ def cleanup_expired(db) -> None:
     changed = False
     now = now_utc()
     for item in rows:
-        if is_expired(item, now):
+        counts = vote_counts(db, item.id)
+        marked_for_removal = counts["gone"] > 0 or counts["incorrect"] > 0
+        if is_expired(item, now) or marked_for_removal:
             item.active = False
             item.updated_at = now
             changed = True
@@ -403,7 +404,7 @@ def vote_incident(
         db.flush()
         counts = vote_counts(db, incident_id)
 
-        if counts["gone"] >= AUTO_CLOSE_VOTES or counts["incorrect"] >= AUTO_CLOSE_VOTES:
+        if counts["gone"] > 0 or counts["incorrect"] > 0:
             row.active = False
 
         db.commit()
