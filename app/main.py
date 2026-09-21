@@ -375,6 +375,10 @@ def serialize_incident(
     counts = vote_counts(db, item.id)
     total_confirmations = item.confirmations + counts["confirm"]
     owner = db.get(IncidentOwner, item.id)
+    owned_by_me = False
+    if actor_token:
+        owned_by_me = owner_matches_and_migrate(db, item.id, actor_token, legacy_token)
+        owner = db.get(IncidentOwner, item.id)
     owner_reputation = (
         reputation_for_actor(db, owner.owner_token)
         if owner
@@ -382,9 +386,6 @@ def serialize_incident(
     )
     weighted_confirmations = round(total_confirmations * owner_reputation["weight"], 2)
     age_seconds = max(0, int((now_utc() - normalize_dt(item.created_at)).total_seconds()))
-    owned_by_me = False
-    if actor_token:
-        owned_by_me = owner_matches_and_migrate(db, item.id, actor_token, legacy_token)
 
     return {
         "id": item.id,
@@ -425,7 +426,11 @@ def require_admin(key: str | None) -> None:
 
 @app.get("/health")
 def health():
-    return {"ok": True, "version": "1.1.0"}
+    return {
+        "ok": True,
+        "version": "1.1.0",
+        "telegram_auth_configured": bool(TELEGRAM_BOT_TOKEN),
+    }
 
 
 @app.get("/manifest.webmanifest")
@@ -687,6 +692,11 @@ def vote_incident(
         row = db.get(Incident, incident_id)
         if not row or not row.active:
             raise HTTPException(status_code=404, detail="Incidente no encontrado")
+        if owner_matches_and_migrate(db, incident_id, actor_token, legacy_token):
+            raise HTTPException(
+                status_code=400,
+                detail="No puedes votar tu propio reporte; puedes editarlo o eliminarlo",
+            )
 
         existing = db.scalar(
             select(IncidentVote).where(
