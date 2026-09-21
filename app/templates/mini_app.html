@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Tráfico Seguro</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    body {
+      margin: 0;
+      background: var(--tg-theme-bg-color, #f6f7f9);
+      color: var(--tg-theme-text-color, #111827);
+    }
+    main {
+      max-width: 620px;
+      margin: 0 auto;
+      padding: 18px 16px 32px;
+    }
+    h1 { margin: 0 0 8px; font-size: 24px; }
+    p { line-height: 1.45; }
+    .card {
+      background: var(--tg-theme-secondary-bg-color, #ffffff);
+      border-radius: 16px;
+      padding: 16px;
+      margin-top: 14px;
+    }
+    .status {
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .muted {
+      opacity: .72;
+      font-size: 14px;
+    }
+    button, select, textarea, a.action {
+      box-sizing: border-box;
+      width: 100%;
+      border: 0;
+      border-radius: 12px;
+      padding: 13px 14px;
+      font: inherit;
+      margin-top: 10px;
+    }
+    button, a.action {
+      background: var(--tg-theme-button-color, #2481cc);
+      color: var(--tg-theme-button-text-color, white);
+      font-weight: 700;
+      text-align: center;
+      text-decoration: none;
+      display: block;
+      cursor: pointer;
+    }
+    button.secondary {
+      background: var(--tg-theme-secondary-bg-color, #e5e7eb);
+      color: var(--tg-theme-text-color, #111827);
+      outline: 1px solid rgba(127,127,127,.25);
+    }
+    button:disabled {
+      opacity: .45;
+      cursor: not-allowed;
+    }
+    select, textarea {
+      background: var(--tg-theme-bg-color, #f8fafc);
+      color: var(--tg-theme-text-color, #111827);
+      outline: 1px solid rgba(127,127,127,.25);
+    }
+    textarea { resize: vertical; min-height: 74px; }
+    .hidden { display: none; }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .grid button { margin-top: 0; }
+    .ok { color: #15803d; }
+    .warn { color: #b45309; }
+    .error { color: #b91c1c; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>🚦 Tráfico Seguro</h1>
+  <p class="muted">La ubicación se usa para habilitar funciones cercanas. No se guarda como historial personal.</p>
+
+  <section class="card" id="locationCard">
+    <div id="locationStatus" class="status">Comprobando ubicación…</div>
+    <div id="locationDetail" class="muted">Espera un momento.</div>
+    <button id="retryLocation" class="hidden">Comprobar ubicación</button>
+    <button id="openSettings" class="secondary hidden">Abrir ajustes de ubicación</button>
+  </section>
+
+  <section class="card hidden" id="menuCard">
+    <div class="status ok">✅ Ubicación disponible</div>
+    <div id="coords" class="muted"></div>
+    <div class="grid" style="margin-top:12px;">
+      <button id="showMap">🗺 Ver mapa</button>
+      <button id="showReport">🚨 Reportar incidente</button>
+    </div>
+  </section>
+
+  <section class="card hidden" id="reportCard">
+    <div class="status">🚨 Reportar incidente</div>
+    <select id="kind">
+      <option value="">Selecciona el tipo</option>
+      <option value="accidente">🚗 Accidente</option>
+      <option value="via_cerrada">⛔ Vía cerrada</option>
+      <option value="inundacion">🌊 Inundación</option>
+      <option value="semaforo">🚦 Semáforo dañado</option>
+      <option value="obras">🚧 Obras</option>
+      <option value="congestion">🐢 Congestión</option>
+    </select>
+    <textarea id="description" maxlength="240" placeholder="Descripción opcional"></textarea>
+    <button id="submitReport">Registrar en mi ubicación actual</button>
+    <button id="cancelReport" class="secondary">Cancelar</button>
+    <p class="muted">🛂 Los controles viales oficiales no se aceptan como reportes comunitarios en tiempo real.</p>
+    <div id="reportResult" class="muted"></div>
+  </section>
+</main>
+
+<script>
+(() => {
+  const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+  const radiusKm = {{ radius_km }};
+  let currentLocation = null;
+
+  const statusEl = document.getElementById("locationStatus");
+  const detailEl = document.getElementById("locationDetail");
+  const retryBtn = document.getElementById("retryLocation");
+  const settingsBtn = document.getElementById("openSettings");
+  const menuCard = document.getElementById("menuCard");
+  const reportCard = document.getElementById("reportCard");
+  const coordsEl = document.getElementById("coords");
+  const resultEl = document.getElementById("reportResult");
+
+  function setStatus(title, detail, kind = "") {
+    statusEl.textContent = title;
+    statusEl.className = "status " + kind;
+    detailEl.textContent = detail || "";
+  }
+
+  function enableApp(location) {
+    currentLocation = location;
+    const accuracy = location.horizontal_accuracy != null
+      ? ` · precisión aprox. ${Math.round(location.horizontal_accuracy)} m`
+      : "";
+    coordsEl.textContent = `Ubicación verificada${accuracy}`;
+    menuCard.classList.remove("hidden");
+    retryBtn.classList.add("hidden");
+    settingsBtn.classList.add("hidden");
+    setStatus("✅ Ubicación disponible", "Las funciones de mapa y reportes están habilitadas.", "ok");
+  }
+
+  function locationFailed(message, allowSettings = true) {
+    currentLocation = null;
+    menuCard.classList.add("hidden");
+    reportCard.classList.add("hidden");
+    retryBtn.classList.remove("hidden");
+    if (allowSettings) settingsBtn.classList.remove("hidden");
+    setStatus("Ubicación no disponible", message, "warn");
+  }
+
+  function requestLocation() {
+    if (!tg || !tg.LocationManager) {
+      locationFailed("Esta versión de Telegram no ofrece acceso de ubicación para Mini Apps. Actualiza Telegram e inténtalo nuevamente.", false);
+      return;
+    }
+
+    const lm = tg.LocationManager;
+
+    const ask = () => {
+      if (!lm.isLocationAvailable) {
+        locationFailed("Los servicios de ubicación no están disponibles en este dispositivo. Activa la ubicación del sistema e inténtalo nuevamente.");
+        return;
+      }
+
+      setStatus("Solicitando ubicación…", "Telegram puede pedirte permiso la primera vez.");
+
+      lm.getLocation((locationData) => {
+        if (!locationData) {
+          locationFailed("Telegram no pudo obtener tu ubicación. Revisa el permiso de ubicación e inténtalo nuevamente.");
+          return;
+        }
+        enableApp(locationData);
+      });
+    };
+
+    if (lm.isInited) {
+      ask();
+    } else {
+      lm.init(ask);
+    }
+  }
+
+  retryBtn.addEventListener("click", requestLocation);
+
+  settingsBtn.addEventListener("click", () => {
+    if (tg && tg.LocationManager && tg.LocationManager.openSettings) {
+      tg.LocationManager.openSettings();
+    }
+  });
+
+  document.getElementById("showMap").addEventListener("click", () => {
+    if (!currentLocation) return;
+    const params = new URLSearchParams({
+      lat: currentLocation.latitude,
+      lng: currentLocation.longitude,
+      radius_km: radiusKm
+    });
+    window.location.href = `/map?${params.toString()}`;
+  });
+
+  document.getElementById("showReport").addEventListener("click", () => {
+    reportCard.classList.remove("hidden");
+    resultEl.textContent = "";
+  });
+
+  document.getElementById("cancelReport").addEventListener("click", () => {
+    reportCard.classList.add("hidden");
+  });
+
+  document.getElementById("submitReport").addEventListener("click", async () => {
+    if (!currentLocation) {
+      locationFailed("La ubicación dejó de estar disponible. Vuelve a comprobarla.");
+      return;
+    }
+
+    const kind = document.getElementById("kind").value;
+    const description = document.getElementById("description").value.trim();
+
+    if (!kind) {
+      resultEl.textContent = "Selecciona un tipo de incidente.";
+      return;
+    }
+
+    resultEl.textContent = "Registrando…";
+
+    try {
+      const response = await fetch("/api/incidents", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          kind,
+          latitude: currentLocation.latitude,
+          longitude: currentLocation.longitude,
+          description
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || "No se pudo registrar el incidente.");
+      }
+
+      resultEl.textContent = `✅ Incidente registrado con ID ${data.id}.`;
+      document.getElementById("kind").value = "";
+      document.getElementById("description").value = "";
+    } catch (error) {
+      resultEl.textContent = "No se pudo registrar: " + error.message;
+    }
+  });
+
+  if (tg) {
+    tg.ready();
+    tg.expand();
+  }
+
+  requestLocation();
+})();
+</script>
+</body>
+</html>
