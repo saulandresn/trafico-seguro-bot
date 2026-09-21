@@ -245,12 +245,20 @@
   function showTutorial(){
     tutorialStep=0;
     renderTutorial();
-    $("tutorialOverlay").classList.remove("hidden");
+    const overlay=$("tutorialOverlay");
+    overlay.hidden=false;
+    overlay.style.display="flex";
+    overlay.classList.remove("hidden");
+    overlay.setAttribute("aria-hidden","false");
   }
 
   function finishTutorial(startLocation=true){
     localStorage.setItem("traffic_tutorial_seen_v1","1");
-    $("tutorialOverlay").classList.add("hidden");
+    const overlay=$("tutorialOverlay");
+    overlay.classList.add("hidden");
+    overlay.hidden=true;
+    overlay.style.display="none";
+    overlay.setAttribute("aria-hidden","true");
     if(startLocation&&!currentLocation)requestLocation();
   }
   function showOnly(section){
