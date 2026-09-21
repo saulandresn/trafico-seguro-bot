@@ -650,12 +650,13 @@ def my_incidents(
                 data = serialize_incident(db, item, lat, lng, actor_token, legacy_token)
                 data["active"] = item.active
                 result.append(data)
+        reputation = reputation_for_actor(db, actor_token)
         db.commit()
 
     result.sort(key=lambda x: x["created_at"], reverse=True)
     return {
         "incidents": result,
-        "reputation": reputation_for_actor(SessionLocal(), actor_token) if False else None,
+        "reputation": reputation,
     }
 
 
