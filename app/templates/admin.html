@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Administración · Tráfico Seguro</title>
+  <style>
+    body{font-family:system-ui,sans-serif;margin:0;background:#f3f4f6;color:#111827}
+    main{max-width:980px;margin:auto;padding:20px}
+    .card{background:white;border-radius:14px;padding:16px;margin:12px 0}
+    table{width:100%;border-collapse:collapse;font-size:14px}
+    th,td{text-align:left;padding:8px;border-bottom:1px solid #e5e7eb}
+    button{border:0;border-radius:8px;padding:8px 10px;font-weight:700;cursor:pointer}
+    .active{color:#15803d}.closed{color:#6b7280}
+  </style>
+</head>
+<body>
+<main>
+  <h1>Panel de administración</h1>
+  <div class="card" id="summary">Cargando…</div>
+  <div class="card">
+    <table>
+      <thead><tr><th>ID</th><th>Tipo</th><th>Descripción</th><th>Estado</th><th>Creado</th><th></th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+</main>
+<script>
+const adminKey={{ admin_key|tojson }};
+async function load(){
+  const [statsR,incR]=await Promise.all([
+    fetch("/api/stats"),
+    fetch("/api/admin/incidents",{headers:{"X-Admin-Key":adminKey}})
+  ]);
+  const stats=await statsR.json(), data=await incR.json();
+  document.getElementById("summary").textContent=
+    `${stats.active} activos · ${stats.resolved} cerrados · ${stats.total} totales`;
+  const rows=document.getElementById("rows"); rows.innerHTML="";
+  data.incidents.forEach(item=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>#${item.id}</td><td>${item.kind}</td><td>${item.description||""}</td>
+      <td class="${item.active?"active":"closed"}">${item.active?"Activo":"Cerrado"}</td>
+      <td>${new Date(item.created_at).toLocaleString()}</td>
+      <td>${item.active?'<button>Cerrar</button>':""}</td>`;
+    const b=tr.querySelector("button");
+    if(b)b.onclick=async()=>{
+      await fetch(`/api/admin/incidents/${item.id}/close`,{method:"POST",headers:{"X-Admin-Key":adminKey}});
+      load();
+    };
+    rows.appendChild(tr);
+  });
+}
+load();
+</script>
+</body>
+</html>
