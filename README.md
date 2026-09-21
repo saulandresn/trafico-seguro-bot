@@ -80,3 +80,8 @@ python -m app.bot
 ### Seguridad antes de producción
 
 Antes de abrirlo a usuarios reales conviene añadir autenticación de reportes, anti-spam, deduplicación geográfica, límites por usuario, reputación, moderación y caducidad automática de incidentes.
+
+
+## Release
+
+Current Railway release includes Mini App location checks, exact incident placement, all-reports map view, anonymous report ownership, confirmations, resolved/incorrect feedback, and owner deletion.
