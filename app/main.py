@@ -16,11 +16,12 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from .db import Base, SessionLocal, engine
-from .models import Incident, IncidentOwner, IncidentVote
+from .geo import is_in_loja_province
+from .models import Incident, IncidentOwner, IncidentVote, TermsAcceptance
 
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
-app = FastAPI(title="Tráfico Seguro Bot API", version="1.1.0")
+app = FastAPI(title="Tráfico Seguro Bot API", version="1.2.0")
 Base.metadata.create_all(bind=engine)
 
 USER_REPORTABLE_KINDS = {
@@ -44,6 +45,7 @@ INIT_DATA_MAX_AGE_SECONDS = int(os.getenv("INIT_DATA_MAX_AGE_SECONDS", "86400"))
 RATE_LIMIT_COUNT = 5
 RATE_LIMIT_WINDOW_MINUTES = 15
 DUPLICATE_RADIUS_KM = 0.2
+TERMS_VERSION = "2026-09-21-v1"
 
 TTL_HOURS = {
     "congestion": 2,
@@ -89,6 +91,10 @@ class IncidentUpdate(IncidentCreate):
 
 class VoteCreate(BaseModel):
     action: str
+
+
+class TermsAccept(BaseModel):
+    accepted: bool
 
 
 def now_utc() -> datetime:
@@ -419,6 +425,38 @@ def serialize_incident(
     }
 
 
+def require_terms(db, actor_token: str) -> None:
+    row = db.get(TermsAcceptance, actor_token)
+    if not row or row.terms_version != TERMS_VERSION:
+        raise HTTPException(
+            status_code=403,
+            detail="Debes aceptar los Términos de uso vigentes antes de participar",
+        )
+
+
+def require_loja_report_location(
+    latitude: float,
+    longitude: float,
+    reporter_lat: float | None,
+    reporter_lng: float | None,
+) -> None:
+    if reporter_lat is None or reporter_lng is None:
+        raise HTTPException(
+            status_code=400,
+            detail="No se pudo verificar tu ubicación actual",
+        )
+    if not is_in_loja_province(reporter_lat, reporter_lng):
+        raise HTTPException(
+            status_code=403,
+            detail="Los reportes solo están disponibles para usuarios ubicados dentro de la provincia de Loja",
+        )
+    if not is_in_loja_province(latitude, longitude):
+        raise HTTPException(
+            status_code=400,
+            detail="La ubicación del incidente debe estar dentro de la provincia de Loja",
+        )
+
+
 def require_admin(key: str | None) -> None:
     if not ADMIN_KEY or key != ADMIN_KEY:
         raise HTTPException(status_code=403, detail="Acceso de administración no autorizado")
@@ -428,9 +466,67 @@ def require_admin(key: str | None) -> None:
 def health():
     return {
         "ok": True,
-        "version": "1.1.0",
+        "version": "1.2.0",
         "telegram_auth_configured": bool(TELEGRAM_BOT_TOKEN),
     }
+
+
+@app.get("/terms", response_class=HTMLResponse)
+def terms_page(request: Request):
+    return templates.TemplateResponse(
+        request=request,
+        name="terms.html",
+        context={"terms_version": TERMS_VERSION},
+    )
+
+
+@app.get("/api/region/check")
+def region_check(
+    lat: float = Query(..., ge=-90, le=90),
+    lng: float = Query(..., ge=-180, le=180),
+):
+    return {
+        "region": "Provincia de Loja",
+        "inside": is_in_loja_province(lat, lng),
+    }
+
+
+@app.get("/api/terms/status")
+def terms_status(
+    x_telegram_init_data: str | None = Header(default=None),
+):
+    actor_token, _ = actor_token_from_telegram(x_telegram_init_data)
+    with SessionLocal() as db:
+        row = db.get(TermsAcceptance, actor_token)
+        return {
+            "accepted": bool(row and row.terms_version == TERMS_VERSION),
+            "version": TERMS_VERSION,
+        }
+
+
+@app.post("/api/terms/accept")
+def accept_terms(
+    payload: TermsAccept,
+    x_telegram_init_data: str | None = Header(default=None),
+):
+    if not payload.accepted:
+        raise HTTPException(status_code=400, detail="Debes aceptar los términos")
+    actor_token, _ = actor_token_from_telegram(x_telegram_init_data)
+    with SessionLocal() as db:
+        row = db.get(TermsAcceptance, actor_token)
+        if row:
+            row.terms_version = TERMS_VERSION
+            row.accepted_at = now_utc()
+        else:
+            db.add(
+                TermsAcceptance(
+                    actor_token=actor_token,
+                    terms_version=TERMS_VERSION,
+                    accepted_at=now_utc(),
+                )
+            )
+        db.commit()
+    return {"accepted": True, "version": TERMS_VERSION}
 
 
 @app.get("/manifest.webmanifest")
@@ -503,6 +599,8 @@ def create_incident(
     x_telegram_init_data: str | None = Header(default=None),
     x_client_token: str | None = Header(default=None),
     x_official_report_key: str | None = Header(default=None),
+    x_reporter_lat: float | None = Header(default=None),
+    x_reporter_lng: float | None = Header(default=None),
 ):
     if payload.kind not in ALLOWED_KINDS:
         raise HTTPException(status_code=400, detail="Tipo de incidente no permitido")
@@ -513,9 +611,16 @@ def create_incident(
 
     actor_token, _ = actor_token_from_telegram(x_telegram_init_data)
     legacy_token = clean_token(x_client_token)
+    require_loja_report_location(
+        payload.latitude,
+        payload.longitude,
+        x_reporter_lat,
+        x_reporter_lng,
+    )
 
     with SessionLocal() as db:
         cleanup_expired(db)
+        require_terms(db, actor_token)
         check_rate_limit(db, actor_token)
         description = moderate_description(db, payload.description, actor_token)
 
@@ -558,15 +663,24 @@ def update_incident(
     payload: IncidentUpdate,
     x_telegram_init_data: str | None = Header(default=None),
     x_client_token: str | None = Header(default=None),
+    x_reporter_lat: float | None = Header(default=None),
+    x_reporter_lng: float | None = Header(default=None),
 ):
     if payload.kind not in USER_REPORTABLE_KINDS:
         raise HTTPException(status_code=400, detail="Tipo de incidente no permitido")
 
     actor_token, _ = actor_token_from_telegram(x_telegram_init_data)
     legacy_token = clean_token(x_client_token)
+    require_loja_report_location(
+        payload.latitude,
+        payload.longitude,
+        x_reporter_lat,
+        x_reporter_lng,
+    )
 
     with SessionLocal() as db:
         cleanup_expired(db)
+        require_terms(db, actor_token)
         row = db.get(Incident, incident_id)
         if not row or not row.active:
             raise HTTPException(status_code=404, detail="Incidente no encontrado")
@@ -689,6 +803,7 @@ def vote_incident(
 
     with SessionLocal() as db:
         cleanup_expired(db)
+        require_terms(db, actor_token)
         row = db.get(Incident, incident_id)
         if not row or not row.active:
             raise HTTPException(status_code=404, detail="Incidente no encontrado")
@@ -752,6 +867,7 @@ def delete_own_incident(
     legacy_token = clean_token(x_client_token)
 
     with SessionLocal() as db:
+        require_terms(db, actor_token)
         row = db.get(Incident, incident_id)
         if not row:
             raise HTTPException(status_code=404, detail="Incidente no encontrado")
