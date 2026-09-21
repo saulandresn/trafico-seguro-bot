@@ -14,7 +14,7 @@ from .models import Incident
 
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
-app = FastAPI(title="Tráfico Seguro Bot API", version="0.2.0")
+app = FastAPI(title="Tráfico Seguro Bot API", version="0.3.0")
 Base.metadata.create_all(bind=engine)
 
 USER_REPORTABLE_KINDS = {
@@ -52,6 +52,15 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 @app.get("/health")
 def health():
     return {"ok": True}
+
+
+@app.get("/mini-app", response_class=HTMLResponse)
+def mini_app(request: Request):
+    return templates.TemplateResponse(
+        request=request,
+        name="mini_app.html",
+        context={"radius_km": DEFAULT_RADIUS_KM},
+    )
 
 
 @app.post("/api/incidents")
