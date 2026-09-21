@@ -36,7 +36,7 @@
 
 <div class="legend">
   🚗 Accidente · ⛔ Vía cerrada · 🌊 Inundación · 🚦 Semáforo dañado ·
-  🚧 Obras · 🐢 Congestión · 🚨 Revisión
+  🚧 Obras · 🐢 Congestión · 🚨
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
@@ -52,7 +52,7 @@
     semaforo: { emoji: "🚦", label: "Semáforo dañado" },
     obras: { emoji: "🚧", label: "Obras" },
     congestion: { emoji: "🐢", label: "Congestión" },
-    revision_oficial: { emoji: "🚨", label: "Revisión" }
+    revision_oficial: { emoji: "🚨", label: "" }
   };
 
   const map = L.map("map").setView([userLat, userLng], 14);
@@ -90,7 +90,7 @@
       data.incidents.forEach(item => {
         const meta = incidentTypes[item.kind] || { emoji: "📍", label: item.kind.replaceAll("_", " ") };
         const text = `
-          <strong>${meta.emoji} ${meta.label}</strong><br>
+          <strong>${meta.emoji}${meta.label ? " " + meta.label : ""}</strong><br>
           ${item.description || "Sin descripción"}<br>
           ${item.distance_km} km · ${item.confirmations} confirmación(es)
         `;
