@@ -11,7 +11,19 @@
     header h1 { margin: 0 0 4px; font-size: 18px; }
     header p { margin: 0; color: #6b7280; font-size: 13px; }
     #map { height: 72vh; min-height: 420px; }
-    .legend { padding: 12px 16px; font-size: 13px; }
+    .legend { padding: 12px 16px; font-size: 13px; line-height: 1.7; }
+    .emoji-marker {
+      background: white;
+      border: 2px solid #111827;
+      border-radius: 50%;
+      width: 34px !important;
+      height: 34px !important;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      box-shadow: 0 2px 6px rgba(0,0,0,.22);
+    }
   </style>
 </head>
 <body>
@@ -19,30 +31,76 @@
   <h1>Actividad vial cercana</h1>
   <p>Solo se muestran incidentes dentro de {{ radius_km }} km de la ubicación compartida.</p>
 </header>
+
 <div id="map"></div>
-<div class="legend">Tipos: accidente · vía cerrada · inundación · semáforo · congestión · obras.</div>
+
+<div class="legend">
+  🚗 Accidente · ⛔ Vía cerrada · 🌊 Inundación · 🚦 Semáforo dañado ·
+  🚧 Obras · 🐢 Congestión · 🛂 Control vial oficial
+</div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script>
   const userLat = {{ lat }};
   const userLng = {{ lng }};
   const radiusKm = {{ radius_km }};
-  const map = L.map('map').setView([userLat, userLng], 14);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+
+  const incidentTypes = {
+    accidente: { emoji: "🚗", label: "Accidente" },
+    via_cerrada: { emoji: "⛔", label: "Vía cerrada" },
+    inundacion: { emoji: "🌊", label: "Inundación" },
+    semaforo: { emoji: "🚦", label: "Semáforo dañado" },
+    obras: { emoji: "🚧", label: "Obras" },
+    congestion: { emoji: "🐢", label: "Congestión" },
+    control_vial_oficial: { emoji: "🛂", label: "Control vial oficial" }
+  };
+
+  const map = L.map("map").setView([userLat, userLng], 14);
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
-    attribution: '&copy; OpenStreetMap contributors'
+    attribution: "&copy; OpenStreetMap contributors"
   }).addTo(map);
-  L.circle([userLat, userLng], {radius: radiusKm * 1000, fillOpacity: 0.04}).addTo(map);
-  L.circleMarker([userLat, userLng], {radius: 7}).addTo(map).bindPopup('Tu ubicación compartida');
+
+  L.circle([userLat, userLng], {
+    radius: radiusKm * 1000,
+    fillOpacity: 0.04
+  }).addTo(map);
+
+  L.circleMarker([userLat, userLng], { radius: 7 })
+    .addTo(map)
+    .bindPopup("Tu ubicación compartida");
+
+  function emojiIcon(emoji) {
+    return L.divIcon({
+      className: "emoji-marker",
+      html: emoji,
+      iconSize: [34, 34],
+      iconAnchor: [17, 17],
+      popupAnchor: [0, -18]
+    });
+  }
 
   fetch(`/api/incidents/nearby?lat=${encodeURIComponent(userLat)}&lng=${encodeURIComponent(userLng)}&radius_km=${encodeURIComponent(radiusKm)}`)
-    .then(r => r.json())
+    .then(response => {
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      return response.json();
+    })
     .then(data => {
       data.incidents.forEach(item => {
-        const text = `<strong>${item.kind.replace('_', ' ')}</strong><br>${item.description || 'Sin descripción'}<br>${item.distance_km} km · ${item.confirmations} confirmación(es)`;
-        L.marker([item.lat, item.lng]).addTo(map).bindPopup(text);
+        const meta = incidentTypes[item.kind] || { emoji: "📍", label: item.kind.replaceAll("_", " ") };
+        const text = `
+          <strong>${meta.emoji} ${meta.label}</strong><br>
+          ${item.description || "Sin descripción"}<br>
+          ${item.distance_km} km · ${item.confirmations} confirmación(es)
+        `;
+
+        L.marker([item.lat, item.lng], { icon: emojiIcon(meta.emoji) })
+          .addTo(map)
+          .bindPopup(text);
       });
     })
-    .catch(() => alert('No se pudo cargar la actividad cercana.'));
+    .catch(() => alert("No se pudo cargar la actividad cercana."));
 </script>
 </body>
 </html>
