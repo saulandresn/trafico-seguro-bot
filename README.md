@@ -84,4 +84,4 @@ Antes de abrirlo a usuarios reales conviene añadir autenticación de reportes, 
 
 ## Release
 
-Current Railway release includes Mini App location checks, exact incident placement, all-reports map view, anonymous report ownership, confirmations, resolved/incorrect feedback, and owner deletion.
+Current Railway release includes Mini App location checks, exact incident placement, all-reports map view, anonymous report ownership, confirmations, resolved/incorrect feedback, and owner deletion. Release trigger: final.
