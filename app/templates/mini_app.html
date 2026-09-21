@@ -84,6 +84,11 @@
 (() => {
   const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
   const radiusKm = {{ radius_km }};
+  let clientToken = localStorage.getItem("traffic_client_token");
+  if (!clientToken) {
+    clientToken = (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+    localStorage.setItem("traffic_client_token", clientToken);
+  }
   let currentLocation = null;
   let reportLocation = null;
   let pickMap = null;
@@ -251,7 +256,7 @@
     try {
       const response = await fetch("/api/incidents", {
         method: "POST",
-        headers: {"Content-Type": "application/json"},
+        headers: {"Content-Type": "application/json", "X-Client-Token": clientToken},
         body: JSON.stringify({
           kind,
           latitude: reportLocation.latitude,
