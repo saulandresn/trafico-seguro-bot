@@ -36,6 +36,7 @@
 </header>
 
 <div class="toolbar">
+  <button id="homeBtn">🏠 Inicio</button>
   <button id="nearbyBtn" class="active">📍 Cerca de mí</button>
   <button id="allBtn">🌐 Ver todos</button>
 </div>
@@ -61,6 +62,7 @@
     semaforo: { emoji: "🚦", label: "Semáforo dañado" },
     obras: { emoji: "🚧", label: "Obras" },
     congestion: { emoji: "🐢", label: "Congestión" },
+    alarma: { emoji: "🚨", label: "" },
     revision_oficial: { emoji: "🚨", label: "" }
   };
 
@@ -121,7 +123,7 @@
         <button onclick="voteIncident(${item.id}, 'incorrect')">⚠️ Incorrecto</button>
         ${ownerButton}
       `;
-      L.marker([item.lat, item.lng], { icon: emojiIcon(meta.emoji) })
+      L.marker([item.lat, item.lng], { icon: emojiIcon(meta.emoji), incidentId: item.id })
         .addTo(incidentLayer)
         .bindPopup(text);
       bounds.push([item.lat, item.lng]);
@@ -159,6 +161,11 @@
       return;
     }
     map.closePopup();
+    incidentLayer.eachLayer(layer => {
+      if (layer.options && layer.options.incidentId === id) {
+        incidentLayer.removeLayer(layer);
+      }
+    });
     await loadIncidents(currentShowAll);
   };
 
@@ -177,6 +184,10 @@
     map.closePopup();
     await loadIncidents(currentShowAll);
   };
+
+  document.getElementById("homeBtn").addEventListener("click", () => {
+    window.location.href = "/mini-app";
+  });
 
   document.getElementById("nearbyBtn").addEventListener("click", async () => {
     currentShowAll = false;
