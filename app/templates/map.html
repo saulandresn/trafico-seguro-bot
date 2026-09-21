@@ -182,6 +182,11 @@
       return;
     }
     map.closePopup();
+    incidentLayer.eachLayer(layer => {
+      if (layer.options && layer.options.incidentId === id) {
+        incidentLayer.removeLayer(layer);
+      }
+    });
     await loadIncidents(currentShowAll);
   };
 
