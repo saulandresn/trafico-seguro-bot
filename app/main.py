@@ -14,7 +14,7 @@ from .models import Incident, IncidentOwner, IncidentVote
 
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
-app = FastAPI(title="Tráfico Seguro Bot API", version="0.4.0")
+app = FastAPI(title="Tráfico Seguro Bot API", version="0.5.0")
 Base.metadata.create_all(bind=engine)
 
 USER_REPORTABLE_KINDS = {
@@ -24,6 +24,7 @@ USER_REPORTABLE_KINDS = {
     "semaforo",
     "congestion",
     "obras",
+    "alarma",
 }
 OFFICIAL_ONLY_KINDS = {"revision_oficial"}
 ALLOWED_KINDS = USER_REPORTABLE_KINDS | OFFICIAL_ONLY_KINDS
